@@ -67,29 +67,40 @@ void setup() {
 
 void loop() {
   
+  //get midi notes 1 and/or 2 
   Note note_1 = read_midi();
   Note note_2 = read_midi();
 
-  delay(get_solenoid_on_delay(note_1)); //delay for certain time based on how many solenoids are actuated
+  //if 2 notes read at the same time:
+  if(note_1.note_index >= 0 && note_2.note_index >= 0){
+    if(note_1.velocity - note_2.velocity >=0){
+      delay(get_solenoid_on_delay(note_2));
+      send_SPI_message_off(note_2);
+      
+      delay(get_solenoid_on_delay(note_1) - get_solenoid_on_delay(note_2)); //delay for remainder of time
+      send_SPI_message_off(note_1); 
+    }else{
+      delay(get_solenoid_on_delay(note_1));
+      send_SPI_message_off(note_1); 
+      
+      delay(get_solenoid_on_delay(note_2) - get_solenoid_on_delay(note_1)); //delay for remainder of time
+      send_SPI_message_off(note_2); 
   
-  if(note_1.note_index >= 0){
-    Serial.print("Note 1 index: ");
-    Serial.println(note_1.note_index);
-    send_SPI_message_off(note_1); 
+  //else if 1 note read:
+  }else if(note_1.note_index >= 0){
+    delay(get_solenoid_on_delay(note_1));
+    send_SPI_message_off(note_1);
   }
 
-  if(note_1.note_index >= 0){
-    send_SPI_message_off(note_2);
-    Serial.print("Note 2 index: ");
-    Serial.println(note_2.note_index); 
-  }
+  //Serial.print("Note 1 index: ");
+  //Serial.println(note_1.note_index);
 
-/*
+  //Serial.print("Note 2 index: ");
+  //Serial.println(note_2.note_index); 
+  
   while(digitalRead(12) == HIGH){
     Note* song = autonomous_seq_generation(0, 32, 4);
     perform_song(song, 32, 90);
-    //available_notes[getRandomIndex(next_note_prob_matrix[3])]
   }
-*/
 
 }
