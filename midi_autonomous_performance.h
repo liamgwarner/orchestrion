@@ -53,6 +53,15 @@ const float next_note_prob_matrix_2[8][8] = {{0.2,  0.2,  0.2,  0.15, 0.05, 0.1,
                                              {0.05, 0.05, 0.05, 0.2,  0.05, 0.35, 0.05, 0.2 },
                                              {0.05, 0.05, 0.05, 0.2,  0.05, 0.35, 0.2,  0.05}};
 
+const float next_note_prob_matrix_3[8][8] = {{0.2,  0.2,  0.2,  0.15, 0.05, 0.1,  0.05, 0.05},
+                                             {0.35, 0.2,  0.2,  0.05, 0.05, 0.05, 0.05, 0.05},
+                                             {0.2,  0.2,  0.2,  0.15, 0.05, 0.1,  0.05, 0.05},
+                                             {0.35, 0.2,  0.05, 0.05, 0.05, 0.2,  0.05, 0.05},
+                                             {0.05, 0.2,  0.05, 0.35, 0.05, 0.05, 0.2,  0.2 },
+                                             {0.1,  0.1,  0.1,  0.2,  0.05, 0.15, 0.1,  0.2 },
+                                             {0.05, 0.05, 0.05, 0.2,  0.05, 0.35, 0.05, 0.2 },
+                                             {0.05, 0.05, 0.05, 0.2,  0.05, 0.35, 0.2,  0.05}};
+
 /***************************
  * SPI FUNCTIONS START HERE
  **************************/
@@ -268,7 +277,7 @@ int check_note_leap(Note* song, int cur_index){
 
   if(abs(song[j].note_index - song[j - 1].note_index) >= 4){
     //do cool resolution
-    while(!(song[j].note_index == 0 || song[j].note_index == 5)){
+    while(!(song[j].note_index == 0)){
       j++;
       song[j].duration = round(R.uniform(1.5, 4.5));
       song[j].note_index = song[j-1].note_index - 1; 
@@ -287,19 +296,19 @@ Note* autonomous_seq_generation(int energy_level, int song_length, int time_sig)
 
   for (int i=0; i<song_length; i++){
 
-    for (int j=1; j<(4*4); j++){
+    for (int j=1; j<(4*time_sig); j++){
       rand_note_index = getNextNoteIndex(song[(i*time_sig*4)+j-1].note_index);
       if(rand_note_index == -1){
         while(1); //do nothing if this happens, or THROW ERROR
       }
       song[i+j].note_index = rand_note_index;
       song[i+j].duration = round(R.uniform(1.5, 4.5));
-
+      Serial.println(song[i+j].note_index);
       j = check_note_leap(song, j);
       //Serial.print(song[i]);
     }
-
-    song[i*4*4].note_index = getStartNoteIndex();
+    Serial.println("New Phrase");
+    song[i*4*time_sig].note_index = getStartNoteIndex();
 
   };
   return song;

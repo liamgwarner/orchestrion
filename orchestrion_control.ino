@@ -15,8 +15,7 @@
 
 #define BUZZ_PIN 5 //pin for testing with speaker
 
-// SETUP AND MAIN LOOP
-
+//read midi function, does one note at a time
 Note read_midi(){
   midiEventPacket_t rx = MidiUSB.read();
   
@@ -32,7 +31,7 @@ Note read_midi(){
         rx.byte3         //velocity
       );
       break;  
-    case 0x8:
+    /*case 0x8:
       noteOff(
         rx.byte1 & 0xF,  //channel
         rx.byte2,        //pitch
@@ -45,7 +44,7 @@ Note read_midi(){
         rx.byte2,        //control
         rx.byte3         //value
       );
-      break;
+      break;*/
     default:
       Serial.print("Unhandled MIDI message: ");
       Serial.print(rx.header, HEX);
@@ -60,7 +59,7 @@ Note read_midi(){
 }
 
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(9600);
   pinMode(12, INPUT);
   pinMode(5, OUTPUT);
 }
@@ -85,7 +84,7 @@ void loop() {
       
       delay(get_solenoid_on_delay(note_2) - get_solenoid_on_delay(note_1)); //delay for remainder of time
       send_SPI_message_off(note_2); 
-  
+    }
   //else if 1 note read:
   }else if(note_1.note_index >= 0){
     delay(get_solenoid_on_delay(note_1));
@@ -98,9 +97,9 @@ void loop() {
   //Serial.print("Note 2 index: ");
   //Serial.println(note_2.note_index); 
   
-  while(digitalRead(12) == HIGH){
+  //digitalRead(12) == HIGH
+  while(1){
     Note* song = autonomous_seq_generation(0, 32, 4);
     perform_song(song, 32, 90);
   }
-
 }
