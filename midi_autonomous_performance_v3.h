@@ -12,7 +12,7 @@
 #define CS_PIN3 13
 #define NOTE_ON 1
 #define NOTE_OFF 0
-#define SOLENOID_ON_TIME 100
+#define SOLENOID_ON_TIME 100 //solenoid on time, in ms
 
 #include "Prandom.h" //Prandom library by Rob Tillaart
 #include <vector>
@@ -21,7 +21,7 @@
 
 //1 MHz SPI clock, shifts in data MSB first, data mode is 0
 //see https://en.wikipedia.org/wiki/Serial_Peripheral_Interface for more detail
-SPISettings spi_settings = {100000, MSBFIRST, SPI_MODE0};
+SPISettings spi_settings = {1000000, MSBFIRST, SPI_MODE0};
 
 static Prandom R;
 
@@ -47,8 +47,13 @@ static int note_is_off_velocity[8] = {0};
 // Integer conversion here: 60=C4, 61=C#4/Db4, 62=D, 63=D#/Eb, 64=E, 65=F, 66=F#/Gb, 67=G, 68=G#/Ab, 69=A, 70=A#/Bb, 71=B
 const int available_notes[8] = {60, 62, 63, 67, 69, 72, 74, 75};
 
+// Probability array for determining the starting note in a phrase
 const float start_note_prob_array[8] = {0.35, 0.05, 0.05, 0.1, 0.05, 0.30, 0.05, 0.05};
 
+// Probability matrices for determining the next note in a phrase
+// Each row is a "state" (current note is something, ex: row 0 for cur_note = C4)
+// Each column in a given row is the probability that the next note is that note
+// These notes respectively correspond to the notes in the available_notes array
 const float next_note_prob_matrix_2[8][8] = {{0.2,  0.2,  0.2,  0.15, 0.05, 0.1,  0.05, 0.05},
                                              {0.35, 0.2,  0.2,  0.05, 0.05, 0.05, 0.05, 0.05},
                                              {0.2,  0.2,  0.2,  0.15, 0.05, 0.1,  0.05, 0.05},
@@ -76,10 +81,21 @@ const float next_note_prob_matrix_3[8][8] = {{0.05, 0.05, 0.05, 0.05, 0.20, 0.20
                                              {0.05, 0.05, 0.05, 0.05, 0.20, 0.20, 0.20, 0.20},
                                              {0.05, 0.05, 0.05, 0.05, 0.20, 0.20, 0.20, 0.20}};                                
 
+/***********************************************************
+ * Function: Example Function Header
+ * Description:
+ * 
+ ***********************************************************/
+
 /***************************
  * SPI FUNCTIONS START HERE
  **************************/
 
+/******************************************
+ * Function: checkFault()
+ * Description: This function checks if the
+ * fault pin is low, returns true if so.
+ *****************************************/
 bool checkFault(){
   if(digitalRead(FAULT_PIN) == LOW){
     return 1;
@@ -88,6 +104,11 @@ bool checkFault(){
   }
 }
 
+/***********************************************************
+ * Function: get_cs_pin()
+ * Description: Returns the CS_PIN constant
+ * given the note_index.
+ ***********************************************************/
 int get_cs_pin(int note_index){
   if(note_index <= 1){
     return CS_PIN0;
@@ -102,6 +123,13 @@ int get_cs_pin(int note_index){
   }
 }
 
+/***********************************************************
+ * Function: byte get_other_bits(byte, Note, bool)
+ * Description: Returns an 8-bit SPI message with the other
+ * bits of the other note in its TPIC pairing (C4 paired with
+ * D4) if the other note is active, meaning its velocity is
+ * set in the note_is_off_velocity array.
+ ***********************************************************/
 byte get_other_bits(byte message, Note cur_note, bool first_note_in_pair){
   int cur_index = 0;
   if(first_note_in_pair == 1){ // if first note was already set 
@@ -130,7 +158,12 @@ byte get_other_bits(byte message, Note cur_note, bool first_note_in_pair){
 }
 
 
-//function to get the SPI_message to send, determines which bits to set based on note
+/***********************************************************
+ * Function: get_SPI_message(Note cur_note)
+ * Description: Returns an SPI message of a given note,
+ * determined by its velocity and note_index. Uses the
+ * get_other_bits_function to account for other active notes.
+ ***********************************************************/
 byte get_SPI_message(Note cur_note){
   byte message = 0b00000000; //initialize message to all zeros
   if(cur_note.note_index % 2 == 0){ //if first of pair of notes (ex: C4 in C4/D4 pair)
@@ -159,8 +192,7 @@ byte get_SPI_message(Note cur_note){
   return message;
 }
 
-
-//NEEDS UPDATING WITH CURRENT VALUES!!!!!!
+//LEGACY, MAY GET RID OF THIS
 int get_solenoid_on_delay(Note cur_note){
   if(cur_note.velocity == 1){
     return 100; 
@@ -171,13 +203,23 @@ int get_solenoid_on_delay(Note cur_note){
   }
 }
 
+/***********************************************************
+ * Function: int get_note_duration_delay(Note cur_note, int bpm)
+ * Description: Returns a note duration delay based on the
+ * bpm and cur_note's duration.
+ ***********************************************************/
 int get_note_duration_delay(Note cur_note, int bpm){
   return (1000 / (4.0 * bpm / cur_note.duration / 60));
 }
 
+/***********************************************************
+ * Function: void send_SPI_message_on(Note cur_note)
+ * Description: This sends an SPI message for the cur_note
+ * using the appropriate CS_PIN and SPI pins. Uses the
+ * get_cs_pin and get_SPI_message functions.
+ ***********************************************************/
 void send_SPI_message_on(Note cur_note){
   int cs_pin = get_cs_pin(cur_note.note_index);
-  byte spi_off = 0b00000000;
   byte spi_received = 0;
   byte spi_message = get_SPI_message(cur_note);
 
@@ -196,6 +238,13 @@ void send_SPI_message_on(Note cur_note){
 
 }
 
+/***********************************************************
+ * Function: void send_SPI_message_off(Note cur_note)
+ * Description: This turns a particular note OFF, depending
+ * on its note_index. Accounts for other active notes with
+ * with the get_other_bits function (doesn't turn them off
+ * prematurely).
+ ***********************************************************/
 void send_SPI_message_off(Note cur_note){
   //turn solenoid(s) off regardless
   int cs_pin = get_cs_pin(cur_note.note_index);
@@ -222,7 +271,11 @@ void send_SPI_message_off(Note cur_note){
   Serial.println(cs_pin);
 }
 
-
+/***********************************************************
+ * Function: update_note_timers(int note_is_off_arr[], Note cur_note)
+ * Description: Updates the note_timers array for notes that
+ * are "off" (not currently being actuated).
+ ***********************************************************/
 void update_note_timers(int note_is_off_arr[], Note cur_note){
   for(int i=0; i<8; i++){
     // Only updates timers for notes that are off
@@ -242,6 +295,12 @@ void update_note_timers(int note_is_off_arr[], Note cur_note){
   }
 }
 
+/***********************************************************
+ * Function: void check_note_timers(int note_is_off_arr[])
+ * Description: Checks the note timers array for any notes
+ * that have been on longer than SOLENOID_ON_TIME. If so,
+ * it turns that note off and updates the appropriate arrays.
+ ***********************************************************/
 void check_note_timers(int note_is_off_arr[]){
   for(int i=0; i<8; i++){
     if(millis() - note_timers[i] >= SOLENOID_ON_TIME){ 
@@ -258,19 +317,35 @@ void check_note_timers(int note_is_off_arr[]){
   }
 }
 
+
+
 /***************************
  * MIDI FUNCTIONS START HERE
  **************************/
 
+/***********************************************************
+ * Function: const char* pitch_name(byte pitch)
+ * Description: Gets the name of a pitch depending on its
+ * MIDI pitch value (0-127).
+ ***********************************************************/
 const char* pitch_name(byte pitch) {
   static const char* names[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
   return names[pitch % 12];
 }
 
+/***********************************************************
+ * Function: const char* pitch_name(byte pitch)
+ * Description: Returns the octave of a MIDI pitch.
+ ***********************************************************/
 int pitch_octave(byte pitch) {
-  return (pitch / 12) - 1;
+  return (pitch / 12) - 1; //may need to adjust +/-1 for different hardware
 }
 
+/***********************************************************
+ * Function: int velocity_level(byte velocity)
+ * Description: Returns the velocity level 1, 2, 3 depending
+ * on MIDI velocity (0-127)
+ ***********************************************************/
 int velocity_level(byte velocity) {
   if (velocity <= 40)
     return 1;
@@ -279,26 +354,40 @@ int velocity_level(byte velocity) {
   else if (80 < velocity)
     return 3;
   else
-    return 2;
+    return 2; //JUST in case
 }
- 
-//checks if the note is a valid note, and if so returns the note index in available_notes
-//otherwise returns -1
+
+/***********************************************************
+ * Function: int is_valid_note(byte pitch)
+ * Description: checks if note is valid (in available_notes),
+ * returns note_index if so, if not valid returns -1 which is
+ * an indicator to NOT send an SPI message.
+ ***********************************************************/
 int is_valid_note(byte pitch){
   for(int i=0; i < sizeof(available_notes) / sizeof(available_notes[0]); i++){
-    if(pitch == available_notes[i]){ //minus twelve for octave adjustment
+    if(pitch == available_notes[i]){ //sometimes needs plus/minus twelve for octave adjustment
       return i;
     }
   }
   return -1;
 }
 
-Note noteOn(byte channel, byte pitch, byte velocity) {
+/***********************************************************
+ * Function: Note noteOn(byte channel, byte pitch, byte velocity)
+ * Description: A general function to turn "on" a note from
+ * incoming MIDI data parameters (channel, pitch, velocity).
+ * First, it gets the velocity and note_index of the note to
+ * turn on (duration doesn't matter for live MIDI input).
+ * Then, it checks if the note is valid (note_index>=0) AND
+ * if the note is off (not being actuated currently), only then
+ * sends the SPI message and updates the appropriate arrays.
+ ***********************************************************/
+Note noteOn(byte channel, byte pitch, byte velocity){
   Note cur_note;
   cur_note.velocity = velocity_level(velocity);
   cur_note.note_index = is_valid_note(pitch);
 
-  if(cur_note.note_index >= 0){
+  if(cur_note.note_index >= 0 && note_is_off_arr[cur_note.note_index]){
     Serial.println("Note was turned on!");
     Serial.println("Time since last note on (ms): ");
     Serial.println(millis() - this_note_time);
@@ -313,7 +402,8 @@ Note noteOn(byte channel, byte pitch, byte velocity) {
 
   return cur_note;
 }
- 
+
+//LEGACY, may get rid of this. check_note_timers handles turning notes off
 void noteOff(byte channel, byte pitch, byte velocity) {
   Note cur_note;
   cur_note.note_index = is_valid_note(pitch);
@@ -322,12 +412,14 @@ void noteOff(byte channel, byte pitch, byte velocity) {
   send_SPI_message_off(cur_note);
 }
 
-void controlChange(byte channel, byte control, byte value) {
-  //do control change stuff in here
-
-}
-
-//read midi function, does one note at a time
+/***********************************************************
+ * Function: Note read_midi()
+ * Description: Called from main. Reads any incoming MIDI
+ * message and if it is a noteOn event (case 0x9), then
+ * calls noteOn function. Intializes cur_note with note_index
+ * of -1 to ensure that any valid note indices are only from
+ * actual notes.
+ ***********************************************************/
 Note read_midi(){
   midiEventPacket_t rx = MidiUSB.read();
   
