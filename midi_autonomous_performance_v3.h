@@ -4,7 +4,7 @@
  *          for the orchestrion project in ECE44x Oregon State University
  */
 
-#define BUZZ_PIN 5 //pin for testing with speaker
+#define BUZZ_PIN 18 //pin for testing with speaker
 #define FAULT_PIN 9
 #define CS_PIN0 10 //pins for Chip Select on TPICs
 #define CS_PIN1 11
@@ -12,7 +12,7 @@
 #define CS_PIN3 13
 #define NOTE_ON 1
 #define NOTE_OFF 0
-#define SOLENOID_ON_TIME 100 //solenoid on time, in ms
+#define SOLENOID_ON_TIME 100
 
 #include "Prandom.h" //Prandom library by Rob Tillaart
 #include <vector>
@@ -21,7 +21,7 @@
 
 //1 MHz SPI clock, shifts in data MSB first, data mode is 0
 //see https://en.wikipedia.org/wiki/Serial_Peripheral_Interface for more detail
-SPISettings spi_settings = {1000000, MSBFIRST, SPI_MODE0};
+SPISettings spi_settings = {100000, MSBFIRST, SPI_MODE0};
 
 static Prandom R;
 
@@ -33,15 +33,15 @@ struct Note {
 
 static int this_note_time = millis(); //DEBUG PURPOSES           
 
-// Note index corresponds to available_notes array, 1 for available, 0 for off
-static int note_is_off_arr[8] = {1, 1, 1, 1, 1, 1, 1, 1};
+// Note index corresponds to available_notes array, 1 for available/inactive, 0 for unavailable/active
+static int note_inactive_arr[8] = {1, 1, 1, 1, 1, 1, 1, 1};
 
 // Note timers keeps track of how long each note is on, turns off if over certain threshold
 static int note_timers[8] = {0};
 
 // Corresponding index updated with velocity level (1, 2, 3) if note is turned on
-// Happens at the same time the note_is_off_arr array is updated
-static int note_is_off_velocity[8] = {0}; 
+// Happens at the same time the note_inactive_arr array is updated
+static int active_note_vel_arr[8] = {0}; 
 
 // Available_notes defines integer associated available notes for song generation, and associated octave
 // Integer conversion here: 60=C4, 61=C#4/Db4, 62=D, 63=D#/Eb, 64=E, 65=F, 66=F#/Gb, 67=G, 68=G#/Ab, 69=A, 70=A#/Bb, 71=B
@@ -128,29 +128,29 @@ int get_cs_pin(int note_index){
  * Description: Returns an 8-bit SPI message with the other
  * bits of the other note in its TPIC pairing (C4 paired with
  * D4) if the other note is active, meaning its velocity is
- * set in the note_is_off_velocity array.
+ * set in the active_note_vel_arr array.
  ***********************************************************/
 byte get_other_bits(byte message, Note cur_note, bool first_note_in_pair){
   int cur_index = 0;
   if(first_note_in_pair == 1){ // if first note was already set 
   
     cur_index = cur_note.note_index + 1; //check if second note is currently active
-    if(note_is_off_velocity[cur_index] == 1){
+    if(active_note_vel_arr[cur_index] == 1){
       message = message | 0b00010000;
-    }else if (note_is_off_velocity[cur_index] == 2){
+    }else if (active_note_vel_arr[cur_index] == 2){
       message = message | 0b00101000;
-    }else if (note_is_off_velocity[cur_index] == 3){
+    }else if (active_note_vel_arr[cur_index] == 3){
       message = message | 0b00111000;
     }
 
   }else{ // if second note was set already
   
     cur_index = cur_note.note_index - 1; //check if second note is currently active
-    if(note_is_off_velocity[cur_index] == 1){
+    if(active_note_vel_arr[cur_index] == 1){
       message = message | 0b00000010;
-    }else if (note_is_off_velocity[cur_index] == 2){
+    }else if (active_note_vel_arr[cur_index] == 2){
       message = message | 0b00000101;
-    }else if (note_is_off_velocity[cur_index] == 3){
+    }else if (active_note_vel_arr[cur_index] == 3){
       message = message | 0b00000111;
     }
   }
@@ -191,6 +191,7 @@ byte get_SPI_message(Note cur_note){
   }
   return message;
 }
+
 
 //LEGACY, MAY GET RID OF THIS
 int get_solenoid_on_delay(Note cur_note){
@@ -272,15 +273,15 @@ void send_SPI_message_off(Note cur_note){
 }
 
 /***********************************************************
- * Function: update_note_timers(int note_is_off_arr[], Note cur_note)
+ * Function: update_note_timers(int note_inactive_arr[], Note cur_note)
  * Description: Updates the note_timers array for notes that
  * are "off" (not currently being actuated).
  ***********************************************************/
-void update_note_timers(int note_is_off_arr[], Note cur_note){
+void update_note_timers(int note_inactive_arr[], Note cur_note){
   for(int i=0; i<8; i++){
     // Only updates timers for notes that are off
     // Notes that are on retain timer value from when they were turned on
-    if(note_is_off_arr[i]){ 
+    if(note_inactive_arr[i]){ 
       note_timers[i] = millis();
       /*
       Serial.print("Note timer ");
@@ -289,19 +290,21 @@ void update_note_timers(int note_is_off_arr[], Note cur_note){
       Serial.println(note_timers[i]);
       */
     }else{
-      Serial.print("Note is still on: ");
-      Serial.println(i);
+      //FOR DEBUG!
+      //Serial.print("Note is still on: ");
+      //Serial.println(i);
+      
     }
   }
 }
 
 /***********************************************************
- * Function: void check_note_timers(int note_is_off_arr[])
+ * Function: void check_note_timers(int note_inactive_arr[])
  * Description: Checks the note timers array for any notes
  * that have been on longer than SOLENOID_ON_TIME. If so,
  * it turns that note off and updates the appropriate arrays.
  ***********************************************************/
-void check_note_timers(int note_is_off_arr[]){
+void check_note_timers(int note_inactive_arr[]){
   for(int i=0; i<8; i++){
     if(millis() - note_timers[i] >= SOLENOID_ON_TIME){ 
       Serial.print("Time exceeded solenoid on time: ");
@@ -310,8 +313,8 @@ void check_note_timers(int note_is_off_arr[]){
 
       Note cur_note = {i, 0, 3};
       Serial.println("Note is now off!");
-      note_is_off_arr[i] = 1; //note is now off again
-      note_is_off_velocity[i] = 0; //reset corresponding velocity to zero now that note is off
+      note_inactive_arr[i] = 1; //note is now off again
+      active_note_vel_arr[i] = 0; //reset corresponding velocity to zero now that note is off
       send_SPI_message_off(cur_note); //now actually turn it off
     }
   }
@@ -387,13 +390,13 @@ Note noteOn(byte channel, byte pitch, byte velocity){
   cur_note.velocity = velocity_level(velocity);
   cur_note.note_index = is_valid_note(pitch);
 
-  if(cur_note.note_index >= 0 && note_is_off_arr[cur_note.note_index]){
+  if(cur_note.note_index >= 0 && note_inactive_arr[cur_note.note_index]){
     Serial.println("Note was turned on!");
     Serial.println("Time since last note on (ms): ");
     Serial.println(millis() - this_note_time);
     this_note_time = millis();
-    note_is_off_arr[cur_note.note_index] = 0; //whatever note was played is now on
-    note_is_off_velocity[cur_note.note_index] = cur_note.velocity; // record its velocity while it's on
+    note_inactive_arr[cur_note.note_index] = 0; //whatever note was played is now on
+    active_note_vel_arr[cur_note.note_index] = cur_note.velocity; // record its velocity while it's on
     send_SPI_message_on(cur_note);
     if(checkFault()){
       Serial.println("FAULT!");
@@ -407,8 +410,8 @@ Note noteOn(byte channel, byte pitch, byte velocity){
 void noteOff(byte channel, byte pitch, byte velocity) {
   Note cur_note;
   cur_note.note_index = is_valid_note(pitch);
-  note_is_off_arr[cur_note.note_index] = 1; //now the note is off again
-  note_is_off_velocity[cur_note.note_index] = 0; //record no velocity now that it's off
+  note_inactive_arr[cur_note.note_index] = 1; //now the note is off again
+  active_note_vel_arr[cur_note.note_index] = 0; //record no velocity now that it's off
   send_SPI_message_off(cur_note);
 }
 
@@ -443,7 +446,7 @@ Note read_midi(){
  * AUTONOMOUS FUNCTIONS START HERE
  *********************************/
 
-int getStartNoteIndex(){
+int getStartNoteIndex(Prandom R){
   float randomProb = (R.uniform(0.0, 100.0) / 100.0);
   float cumulativeProb = 0.0;
     for (int i = 0; i < 8; i++) {
@@ -455,7 +458,7 @@ int getStartNoteIndex(){
     return -1;
 }
 
-int getNextNoteIndex(int currentRow, int energy_level) {
+int getNextNoteIndex(int currentRow, int energy_level, Prandom R) {
     // Ensure randomization based on current time
 
     float randomProb = (R.uniform(0.0, 100.0) / 100.0);
@@ -481,7 +484,7 @@ int getNextNoteIndex(int currentRow, int energy_level) {
 }
 
 
-int check_note_leap(Note* song, int time_sig, int i, int j){
+int check_note_leap(Note* song, int time_sig, int i, int j, Prandom R){
 
   if (j < 1 || j >= (4 * time_sig)) {
       return j; // Check for boundary condition to prevent out-of-bounds access
@@ -510,7 +513,7 @@ int check_note_leap(Note* song, int time_sig, int i, int j){
   return j;
 }
 
-Note* autonomous_seq_generation(Note* song, int energy_level, int song_length, int time_sig){
+Note* autonomous_seq_generation(Note* song, int energy_level, int song_length, int time_sig, Prandom R){
   int rand_note_index = 0;
 
   Serial.println(song_length / (time_sig*4));
@@ -518,14 +521,14 @@ Note* autonomous_seq_generation(Note* song, int energy_level, int song_length, i
   for (int i=0; i<(song_length / (time_sig*4)); i++){
     
     Serial.println("New Phrase");
-    song[i*4*time_sig].note_index = getStartNoteIndex(); //input starting note
+    song[i*4*time_sig].note_index = getStartNoteIndex(R); //input starting note
     song[i*4*time_sig].duration = 4;
     song[i*4*time_sig].velocity = round(R.uniform(0.5, 3.5));
 
     Serial.println(song[i*4*time_sig].note_index);
 
     for (int j=1; j<(4*time_sig); j++){
-      rand_note_index = getNextNoteIndex(song[(i*time_sig*4)+j-1].note_index, energy_level);
+      rand_note_index = getNextNoteIndex(song[(i*time_sig*4)+j-1].note_index, energy_level, R);
       
       if(rand_note_index == -1){
         Serial.println("UNEXPECTED NOTE!"); //do nothing if this happens, or THROW ERROR
@@ -545,7 +548,7 @@ Note* autonomous_seq_generation(Note* song, int energy_level, int song_length, i
       Serial.println(song[(i*time_sig*4)+j].velocity);
       */
       
-      j = check_note_leap(song, time_sig, i, j);
+      j = check_note_leap(song, time_sig, i, j, R);
 
     };
 
@@ -557,6 +560,11 @@ Note* autonomous_seq_generation(Note* song, int energy_level, int song_length, i
 }
 
 void perform_song(Note* song, int song_length, int bpm){
+  
+  int cur_note_timer = millis();
+  int cur_note_on_time = millis();
+  int note_still_on = 0;
+
   for (int i=0; i<song_length; i++){
     Serial.print("Note played (index, duration, velocity): ");
     Serial.print(song[i].note_index);
@@ -564,13 +572,45 @@ void perform_song(Note* song, int song_length, int bpm){
     Serial.print(song[i].duration);
     Serial.print(", ");
     Serial.println(song[i].velocity);
+
+    //FOR TESTING WITH SOLENOIDS (COMMENT THE OTHER OUT)
+    send_SPI_message_on(song[i]); //send SPI message for note on
+    cur_note_on_time = millis(); //time (ms) when the note was turned on
+    note_still_on = 1;
+
+    Serial.print("Auto note on at (ms): ");
+    Serial.println(cur_note_on_time);
+
+    tone(BUZZ_PIN, pitchFrequency[available_notes[song[i].note_index]]); //for speaker testing
+    //while loop continues to update note timer until FULL note duration is complete
+    while(millis() - cur_note_on_time < 1000 / (4.0 * bpm / song[i].duration / 60)){
+  
+      if(millis() - cur_note_on_time >= SOLENOID_ON_TIME && note_still_on){
+        send_SPI_message_off(song[i]);
+        Serial.print("Auto note off at (ms): ");
+        Serial.println(millis());
+        Serial.println();
+        note_still_on = 0;
+        
+      }
+    }
+
+    noTone(BUZZ_PIN);
     
-    send_SPI_message_on(song[i]); //send SPI message
+    //delay(1000 / (4.0 * bpm / song[i].duration / 60)); //time in ms for note duration
+
+  };
+
+  //cute final note "resolution" (just plays c4)
+  if(song[song_length-1].note_index != 0){
+    Note final_note = {0, 4, 2};
+    send_SPI_message_on(final_note); //send SPI message
     Serial.println();
 
-    tone(BUZZ_PIN, pitchFrequency[available_notes[song[i].note_index]]);
+    tone(BUZZ_PIN, pitchFrequency[available_notes[final_note.note_index]]);
     
-    delay(1000 / (4.0 * bpm / song[i].duration / 60));
+    delay(1000 / (4.0 * bpm / final_note.duration / 60));
     noTone(BUZZ_PIN);
-  };
+  }
+
 }
