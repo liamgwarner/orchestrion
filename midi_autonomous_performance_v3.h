@@ -12,7 +12,7 @@
 #define CS_PIN3 13
 #define NOTE_ON 1
 #define NOTE_OFF 0
-#define SOLENOID_ON_TIME 100
+#define SOLENOID_ON_TIME 60
 
 #include "Prandom.h" //Prandom library by Rob Tillaart
 #include <vector>
@@ -45,7 +45,8 @@ static int active_note_vel_arr[8] = {0};
 
 // Available_notes defines integer associated available notes for song generation, and associated octave
 // Integer conversion here: 60=C4, 61=C#4/Db4, 62=D, 63=D#/Eb, 64=E, 65=F, 66=F#/Gb, 67=G, 68=G#/Ab, 69=A, 70=A#/Bb, 71=B
-const int available_notes[8] = {60, 62, 63, 67, 69, 72, 74, 75};
+//const int available_notes[8] = {60, 62, 63, 67, 69, 72, 74, 75};
+const int available_notes[8] = {60, 69, 67, 75, 63, 74, 62, 72};
 
 // Probability array for determining the starting note in a phrase
 const float start_note_prob_array[8] = {0.35, 0.05, 0.05, 0.1, 0.05, 0.30, 0.05, 0.05};
@@ -196,11 +197,11 @@ byte get_SPI_message(Note cur_note){
 //LEGACY, MAY GET RID OF THIS
 int get_solenoid_on_delay(Note cur_note){
   if(cur_note.velocity == 1){
-    return 100; 
+    return (SOLENOID_ON_TIME + 5); //modify if 1-solenoid needs more on time
   }else if(cur_note.velocity == 2){
-    return 100;
+    return SOLENOID_ON_TIME;
   }else{ //velocity is max
-    return 100;
+    return SOLENOID_ON_TIME;
   }
 }
 
@@ -304,9 +305,9 @@ void update_note_timers(int note_inactive_arr[], Note cur_note){
  * that have been on longer than SOLENOID_ON_TIME. If so,
  * it turns that note off and updates the appropriate arrays.
  ***********************************************************/
-void check_note_timers(int note_inactive_arr[]){
+void check_note_timers(int note_inactive_arr[], Note cur_note){
   for(int i=0; i<8; i++){
-    if(millis() - note_timers[i] >= SOLENOID_ON_TIME){ 
+    if(millis() - note_timers[i] >= get_solenoid_on_delay(cur_note)){ 
       Serial.print("Time exceeded solenoid on time: ");
       Serial.print(millis() - note_timers[i]);
       Serial.println(" ms.");
@@ -350,14 +351,14 @@ int pitch_octave(byte pitch) {
  * on MIDI velocity (0-127)
  ***********************************************************/
 int velocity_level(byte velocity) {
-  if (velocity <= 40)
+  if (1 <= velocity && velocity <= 40) 
     return 1;
   else if (40 < velocity && velocity <= 80)
     return 2;
   else if (80 < velocity)
     return 3;
-  else
-    return 2; //JUST in case
+  else //velocity is zero or invalid
+    return 0; //JUST in case
 }
 
 /***********************************************************
@@ -390,7 +391,7 @@ Note noteOn(byte channel, byte pitch, byte velocity){
   cur_note.velocity = velocity_level(velocity);
   cur_note.note_index = is_valid_note(pitch);
 
-  if(cur_note.note_index >= 0 && note_inactive_arr[cur_note.note_index]){
+  if(cur_note.note_index >= 0 && note_inactive_arr[cur_note.note_index] && cur_note.velocity != 0){
     Serial.println("Note was turned on!");
     Serial.println("Time since last note on (ms): ");
     Serial.println(millis() - this_note_time);
@@ -523,7 +524,8 @@ Note* autonomous_seq_generation(Note* song, int energy_level, int song_length, i
     Serial.println("New Phrase");
     song[i*4*time_sig].note_index = getStartNoteIndex(R); //input starting note
     song[i*4*time_sig].duration = 4;
-    song[i*4*time_sig].velocity = round(R.uniform(0.5, 3.5));
+    //song[i*4*time_sig].velocity = round(R.uniform(0.5, 3.5));
+    song[i*4*time_sig].velocity = 2;
 
     Serial.println(song[i*4*time_sig].note_index);
 
@@ -537,7 +539,8 @@ Note* autonomous_seq_generation(Note* song, int energy_level, int song_length, i
       
       song[(i*time_sig*4)+j].note_index = rand_note_index;
       song[(i*time_sig*4)+j].duration = round(R.uniform(0.5, 2.5));
-      song[(i*time_sig*4)+j].velocity = round(R.uniform(0.5, 3.5));
+      //song[(i*time_sig*4)+j].velocity = round(R.uniform(0.5, 3.5));
+      song[(i*time_sig*4)+j].velocity = 2;
       
       /*
       Serial.print("Generated Note (index, duration, velocity): ");
@@ -581,7 +584,7 @@ void perform_song(Note* song, int song_length, int bpm){
     Serial.print("Auto note on at (ms): ");
     Serial.println(cur_note_on_time);
 
-    tone(BUZZ_PIN, pitchFrequency[available_notes[song[i].note_index]]); //for speaker testing
+    //tone(BUZZ_PIN, pitchFrequency[available_notes[song[i].note_index]]); //for speaker testing
     //while loop continues to update note timer until FULL note duration is complete
     while(millis() - cur_note_on_time < 1000 / (4.0 * bpm / song[i].duration / 60)){
   
@@ -595,7 +598,7 @@ void perform_song(Note* song, int song_length, int bpm){
       }
     }
 
-    noTone(BUZZ_PIN);
+    //noTone(BUZZ_PIN);
     
     //delay(1000 / (4.0 * bpm / song[i].duration / 60)); //time in ms for note duration
 
@@ -605,12 +608,14 @@ void perform_song(Note* song, int song_length, int bpm){
   if(song[song_length-1].note_index != 0){
     Note final_note = {0, 4, 2};
     send_SPI_message_on(final_note); //send SPI message
+    delay(SOLENOID_ON_TIME); //wait
+    send_SPI_message_off(final_note); //turn solenoids off
     Serial.println();
 
-    tone(BUZZ_PIN, pitchFrequency[available_notes[final_note.note_index]]);
+    //tone(BUZZ_PIN, pitchFrequency[available_notes[final_note.note_index]]);
     
     delay(1000 / (4.0 * bpm / final_note.duration / 60));
-    noTone(BUZZ_PIN);
+    //noTone(BUZZ_PIN);
   }
 
 }

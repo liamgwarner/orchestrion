@@ -5,20 +5,19 @@
 #include <time.h>
 #include "midi_autonomous_performance_v3.h"
 
-#define AUTO_PIN 19 //also pin A5
+#define AUTO_PIN 5 //pin used as switch for autonomous mode
 
 void setup() {
   Serial.begin(115200); //baud rate used by examples in USBMIDI library, matching here for safety
   SPI.begin();
-  pinMode(AUTO_PIN, INPUT_PULLUP);
-  pinMode(FAULT_PIN, INPUT_PULLUP);
+  pinMode(AUTO_PIN, INPUT);
+  pinMode(FAULT_PIN, INPUT_PULLUP); //is driven LOW when fault is detected
   pinMode(BUZZ_PIN, OUTPUT);       
   pinMode(CS_PIN0, OUTPUT);
   pinMode(CS_PIN1, OUTPUT);
   pinMode(CS_PIN2, OUTPUT);
   pinMode(CS_PIN3, OUTPUT);
   pinMode(6, OUTPUT); //output enable
-  pinMode(5, INPUT);
 
   digitalWrite(6, HIGH);
   digitalWrite(CS_PIN0, HIGH);
@@ -55,9 +54,10 @@ void loop() {
 
   //cur_note printed earlier
   update_note_timers(note_inactive_arr, cur_note);
-  check_note_timers(note_inactive_arr);
+  check_note_timers(note_inactive_arr, cur_note);
 
-  while(digitalRead(AUTO_PIN) == LOW){
+  /*
+  while(digitalRead(AUTO_PIN) == HIGH){
     int song_length = 48;
     int time_sig = 3;
     int energy_level = 2; 
@@ -85,6 +85,7 @@ void loop() {
     delete[] song;
     delay(2000);
   }
+  */
   
   //delay(1000); //delay for checkoff inputs to fns 
 }
