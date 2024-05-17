@@ -7,15 +7,16 @@
 #include <Wire.h>
 #include <Adafruit_ADS7830.h>
 
-#define AUTO_PIN 5 //pin used as switch for autonomous mode
-#define SENSOR_PIN 6 //pin used as switch for sensor mode
+#define AUTO_PIN 15 //pin used as switch for autonomous mode
+#define SENSOR_PIN 14 //pin used as switch for sensor mode aka A0
 
 void setup() {
   Wire.begin(); //I2C interface intialization
   Serial.begin(115200); //baud rate used by examples in USBMIDI library, matching here for safety
   SPI.begin(); //SPI interface intialization
 
-  pinMode(AUTO_PIN, INPUT);
+  pinMode(AUTO_PIN, INPUT_PULLUP);
+  pinMode(SENSOR_PIN, INPUT_PULLUP);
   pinMode(FAULT_PIN, INPUT_PULLUP); //is driven LOW when fault is detected
   pinMode(BUZZ_PIN, OUTPUT);       
   pinMode(CS_PIN0, OUTPUT);
@@ -31,10 +32,14 @@ void setup() {
   digitalWrite(CS_PIN3, HIGH);         
 
   //make sure ad7830 is set up
+  
+  ad7830.begin();
+  /*
   if (!ad7830.begin()) {
     Serial.println("Failed to initialize ADS7830!");
     while (1);
-  }                                                                                 
+  } 
+  */                                                                                
 }
 
 void loop() {
@@ -67,6 +72,8 @@ void loop() {
   update_note_timers(note_inactive_arr, cur_note);
   check_note_timers(note_inactive_arr, cur_note);
   
+  //Serial.println("In main loop!!!!!!!");
+
   while(digitalRead(AUTO_PIN) == LOW){ // low for autonomous mode
     int song_length = 48;
     int time_sig = 3;
@@ -77,6 +84,7 @@ void loop() {
     Prandom R; //generate seed for random numbers
     song = autonomous_seq_generation(song, energy_level, song_length, time_sig, R, bpm); //song_length must be multiple of (time_sig*4)!
 
+    /*
     for(int i = 0; i<song_length; i++){
       Serial.print("Generated Note (index, duration, velocity): ");
       Serial.print(song[i].note_index);
@@ -85,13 +93,16 @@ void loop() {
       Serial.print(", ");
       Serial.println(song[i].velocity);
     }
+    */
     
     delete[] song;
     delay(2000);
   }
 
-  while(digitalRead(SENSOR_PIN == LOW)){
-    
-
+  while(digitalRead(SENSOR_PIN) == LOW){
+      read_sensor_vals();
+      check_sensors(); 
+      update_sensor_note_timers(note_inactive_arr);
+      check_sensor_note_timers(note_inactive_arr);
   }
 }

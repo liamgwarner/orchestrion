@@ -43,6 +43,10 @@ static int note_inactive_arr[8] = {1, 1, 1, 1, 1, 1, 1, 1};
 // Note timers keeps track of how long each note is on, turns off if over certain threshold
 static int note_timers[8] = {0};
 
+static int sensor_note_timers[8] = {0};
+
+static int sensor_note_wait_timers[8] = {10000};
+
 // Corresponding index updated with velocity level (1, 2, 3) if note is turned on
 // Happens at the same time the note_inactive_arr array is updated
 static int active_note_vel_arr[8] = {0}; 
@@ -70,7 +74,7 @@ const float start_note_prob_array[8] = {0.35, 0.05, 0.05, 0.1, 0.05, 0.30, 0.05,
 */
 
 //fixed to reflect note offsets shown in available notes array lines 50-51
-/*const float next_note_prob_matrix_2[8][8] = {{0.2,  0.2,  0.2,  0.15, 0.05, 0.1,  0.05, 0.05},
+const float next_note_prob_matrix_2[8][8] = {{0.2,  0.2,  0.2,  0.15, 0.05, 0.1,  0.05, 0.05},
                                              {0.05, 0.2,  0.05, 0.35, 0.05, 0.05, 0.2,  0.2 },
                                              {0.35, 0.2,  0.05, 0.05, 0.05, 0.2,  0.05, 0.05},
                                              {0.05, 0.05, 0.05, 0.2,  0.05, 0.35, 0.2,  0.05},
@@ -78,8 +82,9 @@ const float start_note_prob_array[8] = {0.35, 0.05, 0.05, 0.1, 0.05, 0.30, 0.05,
                                              {0.05, 0.05, 0.05, 0.2,  0.05, 0.35, 0.05, 0.2 },
                                              {0.35, 0.2,  0.2,  0.05, 0.05, 0.05, 0.05, 0.05},
                                              {0.1,  0.1,  0.1,  0.2,  0.05, 0.15, 0.1,  0.2 }};
-*/
 
+
+/*
 std::vector<std::vector<float>> next_note_prob_matrix_2 = {{0.2,  0.2,  0.2,  0.15, 0.05, 0.1,  0.05, 0.05},
                                                            {0.05, 0.2,  0.05, 0.35, 0.05, 0.05, 0.2,  0.2 },
                                                            {0.35, 0.2,  0.05, 0.05, 0.05, 0.2,  0.05, 0.05},
@@ -88,8 +93,9 @@ std::vector<std::vector<float>> next_note_prob_matrix_2 = {{0.2,  0.2,  0.2,  0.
                                                            {0.05, 0.05, 0.05, 0.2,  0.05, 0.35, 0.05, 0.2 },
                                                            {0.35, 0.2,  0.2,  0.05, 0.05, 0.05, 0.05, 0.05},
                                                            {0.1,  0.1,  0.1,  0.2,  0.05, 0.15, 0.1,  0.2 }};
+*/
 
-std::vector<std::vector<float>> next_note_prob_matrix_1 = {{0.25, 0.25, 0.25, 0.25, 0.00, 0.00, 0.00, 0.00},
+const float next_note_prob_matrix_1[8][8] = {{0.25, 0.25, 0.25, 0.25, 0.00, 0.00, 0.00, 0.00},
                                                            {0.25, 0.25, 0.25, 0.25, 0.00, 0.00, 0.00, 0.00},
                                                            {0.25, 0.25, 0.25, 0.25, 0.00, 0.00, 0.00, 0.00},
                                                            {0.25, 0.25, 0.25, 0.25, 0.00, 0.00, 0.00, 0.00},
@@ -98,7 +104,7 @@ std::vector<std::vector<float>> next_note_prob_matrix_1 = {{0.25, 0.25, 0.25, 0.
                                                            {0.25, 0.25, 0.25, 0.25, 0.00, 0.00, 0.00, 0.00},
                                                            {0.25, 0.25, 0.25, 0.25, 0.00, 0.00, 0.00, 0.00}};
 
-std::vector<std::vector<float>> next_note_prob_matrix_3 = {{0.05, 0.05, 0.05, 0.05, 0.20, 0.20, 0.20, 0.20},
+const float next_note_prob_matrix_3[8][8] = {{0.05, 0.05, 0.05, 0.05, 0.20, 0.20, 0.20, 0.20},
                                                            {0.05, 0.05, 0.05, 0.05, 0.20, 0.20, 0.20, 0.20},
                                                            {0.05, 0.05, 0.05, 0.05, 0.20, 0.20, 0.20, 0.20},
                                                            {0.05, 0.05, 0.05, 0.05, 0.20, 0.20, 0.20, 0.20},
@@ -107,9 +113,10 @@ std::vector<std::vector<float>> next_note_prob_matrix_3 = {{0.05, 0.05, 0.05, 0.
                                                            {0.05, 0.05, 0.05, 0.05, 0.20, 0.20, 0.20, 0.20},
                                                            {0.05, 0.05, 0.05, 0.05, 0.20, 0.20, 0.20, 0.20}};                                
 
+
 //stores sensor values for associated notes in avaiable_notes array
 //also associated with ADC channels 0-7 respectively
-uint8_t sensor_values[8] = {0};
+static uint8_t sensor_values[8] = {0};
 
 
 /***********************************************************
@@ -329,6 +336,8 @@ void update_note_timers(int note_inactive_arr[], Note cur_note){
   }
 }
 
+
+
 /***********************************************************
  * Function: void check_note_timers(int note_inactive_arr[])
  * Description: Checks the note timers array for any notes
@@ -484,11 +493,98 @@ void read_sensor_vals(){
      Serial.print(i);
      Serial.print(": ");
      Serial.println(sensor_values[i]);
+    
   }
 }
 
-void modify_prob_matrices(int energy_level){
-  
+void check_sensors(){
+  int threshold = 40;
+  Note cur_note = {-1, 0, 1};
+  for(int i=0; i<8; i++){
+    if(sensor_values[i] >= threshold){
+      Note cur_note = {i, 0, 2};
+      if((millis() - sensor_note_timers[i] >= sensor_note_wait_timers[i]) && note_inactive_arr[i]){
+        note_inactive_arr[cur_note.note_index] = 0;
+        active_note_vel_arr[cur_note.note_index] = cur_note.velocity;
+        send_SPI_message_on(cur_note);
+        
+        Serial.print("SENSOR: note on at: ");
+        Serial.print(millis());
+        Serial.println(" ms.");
+      }
+      
+      Serial.print("Sensor note timer ");
+      Serial.print(i);
+      Serial.print(" :");
+      Serial.print(sensor_note_timers[i]);
+      Serial.println(" ms.");
+    }else if(sensor_values[i] < threshold){
+
+    }
+  }
+
+}
+
+void update_sensor_note_timers(int note_inactive_arr[]){
+  for(int i=0; i<8; i++){
+    // Only updates timers for notes that are off
+    // Notes that are on retain timer value from when they were turned on
+    if(note_inactive_arr[i]){ 
+      note_timers[i] = millis();
+
+      /*
+      Serial.print("Sensor note wait timer ");
+      Serial.print(i);
+      Serial.print(" :");
+      Serial.println(sensor_note_wait_timers[i]);
+      */
+    }else{
+      //FOR DEBUG!
+      //Serial.print("Note is still on: ");
+      //Serial.println(i);
+      sensor_note_timers[i] = millis();
+
+       /*
+      Serial.print("Sensor note wait timer ");
+      Serial.print(i);
+      Serial.print(": ");
+      Serial.println(sensor_note_wait_timers[i]);
+      */
+    }
+
+    //sensor_note_wait_timers[i] = abs((int)(4*(250 - sensor_values[i])));
+    sensor_note_wait_timers[i] = (int)(34081.0 / sensor_values[i]) - 90;
+  }
+}
+
+
+void check_sensor_note_timers(int note_inactive_arr[]){
+  for(int i=0; i<8; i++){
+    if(millis() - note_timers[i] >= get_solenoid_on_delay(active_note_vel_arr[i])){ 
+      Serial.print("Time exceeded solenoid on time: ");
+      Serial.print(millis() - note_timers[i]);
+      Serial.println(" ms.");
+
+      Note cur_note = {i, 0, 3};
+      Serial.println("Note is now off!");
+      note_inactive_arr[i] = 1; //note is now off again
+      active_note_vel_arr[i] = 0; //reset corresponding velocity to zero now that note is off
+      send_SPI_message_off(cur_note); //now actually turn it off
+      sensor_note_timers[i] = millis(); //reset the sensor note timer
+    }
+  }
+}
+
+
+
+void modify_prob_matrix(int energy_level){
+  if(energy_level <= 1){
+    
+  }else if(energy_level == 2){
+
+  }else if(energy_level >= 3){
+
+  }
 }
 
 
@@ -558,7 +654,12 @@ Note* autonomous_seq_generation(Note* song, int energy_level, int song_length, i
   int rand_note_index = 0;
   int cur_note_timer = millis();
   int cur_note_on_time = millis();
+  int cur_note_off_time = 999999999;
   int note_still_on = 0;
+  bool repeat_note = 0;
+  int rep_note_on_time = 999999999;
+  int rep_note_off_time = 999999999;
+  int sensor_delay = 0;
 
   Serial.println(song_length / (time_sig*4));
 
@@ -577,8 +678,9 @@ Note* autonomous_seq_generation(Note* song, int energy_level, int song_length, i
       //read sensor data here if sensor mode on
       read_sensor_vals();
       //modify prob matrices with value
-      modify_prob_matrices(energy_level);
-      
+      //modify_prob_matrix(energy_level);
+
+
       rand_note_index = getNextNoteIndex(song[(i*time_sig*4)+j-1].note_index, energy_level, R);
       
       if(rand_note_index == -1){
@@ -607,16 +709,52 @@ Note* autonomous_seq_generation(Note* song, int energy_level, int song_length, i
       //while loop continues to update note timer until FULL note duration is complete
       while(millis() - cur_note_on_time < 1000 / (4.0 * bpm / song[(i*time_sig*4)+j].duration / 60)){
 
-        //check for 
-        if(millis() - cur_note_on_time >= get_solenoid_on_delay(song[(i*time_sig*4)+j].velocity) && note_still_on){
+        //read_sensor_vals();
+        /*
+        if(sensor_values[song[(i*time_sig*4)+j].note_index] > 254 && (millis() - cur_note_off_time) > sensor_delay){
+          repeat_note = 1;
+          sensor_delay = 400 - sensor_values[song[(i*time_sig*4)+j].note_index];
+        }else{
+          repeat_note = 0;
+          sensor_delay = 0;
+        }
+        */
+        
+        //for initial note
+        if(millis() - cur_note_on_time >= get_solenoid_on_delay(song[(i*time_sig*4)+j].velocity) && note_still_on && !repeat_note){
           send_SPI_message_off(song[(i*time_sig*4)+j]);
+          cur_note_off_time = millis();
           Serial.print("Auto note off at (ms): ");
+          Serial.println(cur_note_off_time);
+          Serial.println();
+          note_still_on = 0;
+        }
+        //for repeated notes
+        /*
+        }else if(millis() - rep_note_on_time >= get_solenoid_on_delay(song[(i*time_sig*4)+j].velocity) && note_still_on && repeat_note){
+          send_SPI_message_off(song[(i*time_sig*4)+j]);
+          Serial.print("Repeated note off at (ms): ");
           Serial.println(millis());
           Serial.println();
           note_still_on = 0;
-          
+          rep_note_off_time = millis();
         }
+        */
+
+        //turn on repeated note
+        /*
+        if(note_still_on == 0 && repeat_note){ //actuate note a second time???
+          delay(sensor_delay);
+          send_SPI_message_on(song[(i*time_sig*4)+j]); //send SPI message for note on
+          cur_note_on_time = millis(); //time (ms) when the note was turned on
+          note_still_on = 1; //turn note_still_on back on
+          Serial.print("Repeated note on at (ms): ");
+          Serial.println(cur_note_on_time);
+        }
+        */
+
       }
+
     };
 
     if(rand_note_index == -1)
@@ -652,71 +790,3 @@ Note* autonomous_seq_generation(Note* song, int energy_level, int song_length, i
       */
 
 
-/*
-void perform_song(Note* song, int song_length, int bpm){
-  
-  int cur_note_timer = millis();
-  int cur_note_on_time = millis();
-  int note_still_on = 0;
-
-  for (int i=0; i<song_length; i++){
-    Serial.print("Note played (index, duration, velocity): ");
-    Serial.print(song[i].note_index);
-    Serial.print(", ");
-    Serial.print(song[i].duration);
-    Serial.print(", ");
-    Serial.println(song[i].velocity);
-
-    //read sensor data here
-    read_sensor_vals();
-    if(i != 0){
-      get_next_note(song, i);
-    }
-
-    //do something with value
-
-    //FOR TESTING WITH SOLENOIDS (COMMENT THE OTHER OUT)
-    send_SPI_message_on(song[i]); //send SPI message for note on
-    cur_note_on_time = millis(); //time (ms) when the note was turned on
-    note_still_on = 1;
-
-    Serial.print("Auto note on at (ms): ");
-    Serial.println(cur_note_on_time);
-
-    //tone(BUZZ_PIN, pitchFrequency[available_notes[song[i].note_index]]); //for speaker testing
-    //while loop continues to update note timer until FULL note duration is complete
-    while(millis() - cur_note_on_time < 1000 / (4.0 * bpm / song[i].duration / 60)){
-
-      //check for 
-      if(millis() - cur_note_on_time >= get_solenoid_on_delay(song[i].velocity) && note_still_on){
-        send_SPI_message_off(song[i]);
-        Serial.print("Auto note off at (ms): ");
-        Serial.println(millis());
-        Serial.println();
-        note_still_on = 0;
-        
-      }
-    }
-
-    //noTone(BUZZ_PIN);
-    
-    //delay(1000 / (4.0 * bpm / song[i].duration / 60)); //time in ms for note duration
-
-  };
-
-  //cute final note "resolution" (just plays c4)
-  if(song[song_length-1].note_index != 0){
-    Note final_note = {0, 4, 2};
-    send_SPI_message_on(final_note); //send SPI message
-    delay(SOLENOID_ON_TIME); //wait
-    send_SPI_message_off(final_note); //turn solenoids off
-    Serial.println();
-
-    //tone(BUZZ_PIN, pitchFrequency[available_notes[final_note.note_index]]);
-    
-    delay(1000 / (4.0 * bpm / final_note.duration / 60));
-    //noTone(BUZZ_PIN);
-  }
-
-}
-*/
