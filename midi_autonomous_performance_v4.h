@@ -14,12 +14,18 @@
 #define NOTE_OFF 0
 #define SOLENOID_ON_TIME 60
 
+#define AUTO_PIN 15 //pin used as switch for autonomous mode
+#define SENSOR_PIN 14 //pin used as switch for sensor mode aka A0
+#define OUTPUT_EN 6
+
 #include "Prandom.h" //Prandom library by Rob Tillaart
 #include <iostream>
 #include <vector>
 #include <cmath>
 #include <SPI.h>
 #include <Adafruit_ADS7830.h>
+#include <DS3231.h>
+
 
 //1 MHz SPI clock, shifts in data MSB first, data mode is 0
 //see https://en.wikipedia.org/wiki/Serial_Peripheral_Interface for more detail
@@ -27,11 +33,18 @@ SPISettings spi_settings = {100000, MSBFIRST, SPI_MODE0};
 
 Adafruit_ADS7830 ad7830;
 
+DS3231 myRTC;
+bool century = false;
+bool h12Flag;
+bool pmFlag;
+byte alarmDay, alarmHour, alarmMinute, alarmSecond, alarmBits;
+bool alarmDy, alarmH12Flag, alarmPmFlag;
+
 static Prandom R;
 
 struct Note {
   int note_index;
-  float duration; //rounded to nearest 0.5 (eight note)
+  float duration; //rounded to nearest 0.5 (eighth note)
   int velocity; //1, 2, 3
 };
 
@@ -111,8 +124,9 @@ const float next_note_prob_matrix_3[8][8] = {{0.05, 0.05, 0.05, 0.05, 0.20, 0.20
                                                            {0.05, 0.05, 0.05, 0.05, 0.20, 0.20, 0.20, 0.20},
                                                            {0.05, 0.05, 0.05, 0.05, 0.20, 0.20, 0.20, 0.20},
                                                            {0.05, 0.05, 0.05, 0.05, 0.20, 0.20, 0.20, 0.20},
-                                                           {0.05, 0.05, 0.05, 0.05, 0.20, 0.20, 0.20, 0.20}};                                
+                                                           {0.05, 0.05, 0.05, 0.05, 0.20, 0.20, 0.20, 0.20}};
 
+static int next_note_selection_array[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 
 //stores sensor values for associated notes in avaiable_notes array
 //also associated with ADC channels 0-7 respectively
@@ -164,7 +178,7 @@ int get_cs_pin(int note_index){
 /***********************************************************
  * Function: byte get_other_bits(byte, Note, bool)
  * Description: Returns an 8-bit SPI message with the other
- * bits of the other note in its TPIC pairing (C4 paired with
+ * bits of the other note in its TPIC pairing (ex: C4 paired with
  * D4) if the other note is active, meaning its velocity is
  * set in the active_note_vel_arr array.
  ***********************************************************/
@@ -234,7 +248,7 @@ byte get_SPI_message(Note cur_note){
 //LEGACY, MAY GET RID OF THIS
 int get_solenoid_on_delay(int velocity){
   if(velocity == 1){
-    return (SOLENOID_ON_TIME + 5); //modify if 1-solenoid needs more on time
+    return (SOLENOID_ON_TIME + 30); //modify if 1-solenoid needs more on time
   }else if(velocity == 2){
     return SOLENOID_ON_TIME;
   }else{ //velocity is max
@@ -614,12 +628,12 @@ int getNextNoteIndex(int currentRow, int energy_level, Prandom R) {
     float cumulativeProb = 0.0;
     for (int i = 0; i < 8; i++) {
         
-        if(energy_level <= 1){
-          cumulativeProb += next_note_prob_matrix_1[currentRow][i];
+        if(energy_level <=1){
+          cumulativeProb += next_note_prob_matrix_2[currentRow][i];
         }else if(energy_level == 2){
           cumulativeProb += next_note_prob_matrix_2[currentRow][i];
         }else if(energy_level >= 3){
-          cumulativeProb += next_note_prob_matrix_3[currentRow][i];
+          cumulativeProb += next_note_prob_matrix_2[currentRow][i];
         }
         
         if (randomProb <= cumulativeProb + 1e-5) {
@@ -652,7 +666,6 @@ int check_note_leap(Note* song, int time_sig, int i, int j, Prandom R){
 
 Note* autonomous_seq_generation(Note* song, int energy_level, int song_length, int time_sig, Prandom R, int bpm){
   int rand_note_index = 0;
-  int cur_note_timer = millis();
   int cur_note_on_time = millis();
   int cur_note_off_time = 999999999;
   int note_still_on = 0;
@@ -780,13 +793,371 @@ Note* autonomous_seq_generation(Note* song, int energy_level, int song_length, i
   return song;
 }
 
-      /*
-      if(note_still_on == 0 && repeat_note){ //actuate note a second time???
-        send_SPI_message_on(song[i]); //send SPI message for note on
-        cur_note_on_time = millis(); //time (ms) when the note was turned on
-        note_still_on = 1; //turn note_still_on back on
-        delay(127-value); //delay by 127-value -> if closer, repeat rapidly
+//struct Note {
+//  int note_index;
+// float duration; 
+//  int velocity; //1, 2, 3
+//};
+
+/* BANK OF LICKS PRELIMINARY CODE
+ * NEEDS TESTING
+*/
+
+#define MAX_NOTES 16
+
+// Define the Lick struct with a statically sized array of Notes
+struct Lick {
+    int time_sig_num;     // time signature numerator
+    int time_sig_denom;   // time signature denominator
+    int length;           // length of lick in measures
+    int energy_level;
+    int num_notes;        // Number of Notes in this lick
+    struct Note data[MAX_NOTES];  // Predefined array of notes (up to MAX_NOTES)
+};
+
+const int BoL_len = 18;
+
+// Integer conversion here: 60=C4, 61=C#4/Db4, 62=D, 63=D#/Eb, 64=E, 65=F, 66=F#/Gb, 67=G, 68=G#/Ab, 69=A, 70=A#/Bb, 71=B
+//const int available_notes[8] = {60, 69, 67, 75, 63, 74, 62, 72};
+// C4, A4, G4, Eb5, Eb4, D5, 
+
+// Below is a descrambler for the note indicies
+// Input: index in order of pitch 0 is lowest note on drum, 7 is highest
+// Output: index that correctly maps to hardware and SPI functions
+int get_unscrambled_idx(int idx){
+  std::vector<int> mapping = {0, 6, 4, 2, 1, 7, 5, 3};
+  return mapping[idx];
+}
+
+
+// Static bank of licks with predefined notes and variable note count
+// NOTE: bank of licks is programmed with unscrambled indicies using
+struct Lick Bank_of_licks[BoL_len] = {
+    // 4/4 
+    {4, 4, 1, 1, 5, {{0, 4, 2}, {1, 2, 2}, {2, 2, 2}, {3, 4, 2}, {4, 4, 2}}},
+    {4, 4, 1, 1, 3, {{0, 2, 3}, {1, 2, 3}, {2, 12, 2}}},
+    {4, 4, 1, 1, 4, {{5, 4, 1}, {2, 4, 1}, {5, 2, 1}, {3, 6, 1}}},    
+    {4, 4, 1, 1, 4, {{6, 4, 2}, {1, 4, 2}, {2, 4, 2}, {3, 4, 2}}},
+    {4, 4, 1, 1, 4, {{5, 4, 2}, {2, 4, 2}, {2, 4, 2}, {3, 4, 2}}},
+    {4, 4, 2, 1, 5, {{3, 4, 2}, {1, 4, 2}, {2, 4, 2}, {3, 4, 2}, {4, 4, 2}}},
+
+    {4, 4, 2, 2, 12, {{5, 4, 2}, {3, 2, 2}, {5, 2, 2}, {4, 4, 2}, {3, 2, 2}, {2, 2, 2}, {1, 2, 2}, {2, 2, 2}, {0, 4, 2}, {1, 2, 2}, {6, 2, 2}, {5, 4, 2}}},
+    {4, 4, 1, 2, 6, {{2, 4, 2}, {3, 3, 2}, {5, 3, 2}, {4, 1, 2}, {1, 1, 2}, {0, 4, 2}}},
+    {4, 4, 1, 2, 8, {{5, 2, 2}, {4, 2, 2}, {3, 2, 2}, {2, 1, 2}, {1, 1, 2}, {0, 2, 2}, {5, 2, 2}, {3, 4, 2}}},
+
+    {4, 4, 1, 3, 13, {{0, 1, 2}, {1, 1, 2}, {2, 2, 2}, {3, 1, 2}, {4, 1, 2}, {5, 1, 2}, {6, 1, 2}, {7, 2, 2}, {2, 1, 2}, {0, 1, 2}, {1, 2, 2}, {5, 1, 2}, {7, 1, 2}}},
+    {4, 4, 2, 3, 12, {{0, 2, 0}, {0, 2, 2}, {2, 2, 2}, {3, 2, 2,}, {4, 2, 2,}, {3, 2, 2}, {4, 2, 2}, {2, 2, 2}, {3, 2, 2}, {2, 2, 2}, {0, 2, 2}, {0, 2, 10}}},
+    {4, 4, 1, 3, 10, {{0, 4, 0}, {0, 1.333, 2}, {3, 1.333, 2}, {5, 1.333, 2}, {0, 1.333, 2,}, {3, 1.333, 2,}, {5, 1.333, 2}, {0, 1.333, 2}, {3, 1.333, 2}, {5, 1.333, 2}, {0, 1.333, 2,}, {3, 1.333, 2,}, {5, 1.333, 2}}},
+
+    // 6/8
+    {6, 8, 1, 1, 6, {{0, 6, 2}, {1, 6, 2}, {2, 6, 2}, {3, 6, 2}, {4, 6, 2}, {5, 6, 2}}},
+    {6, 8, 2, 1, 8, {{0, 6, 2}, {1, 6, 2}, {2, 6, 2}, {3, 6, 2}, {4, 6, 2}, {5, 6, 2}, {6, 6, 2}, {7, 6, 2}}},
+
+    // 5/4
+    {5, 4, 1, 2, 5, {{0, 5, 2}, {1, 5, 2}, {2, 5, 2}, {3, 5, 2}, {4, 5, 2}}},
+    {5, 4, 3, 2, 6, {{0, 4, 2}, {1, 4, 2}, {2, 4, 2}, {3, 4, 2}, {4, 4, 2}, {5, 4, 2}}},
+
+    // 3/4
+    {3, 4, 1, 3, 6, {{0, 3, 2}, {1, 3, 2}, {2, 3, 2}, {3, 3, 2}, {4, 3, 2}, {5, 3, 2}}},
+    {7, 4, 2, 3, 8, {{0, 7, 2}, {1, 7, 2}, {2, 7, 2}, {3, 7, 2}, {4, 7, 2}, {5, 7, 2}}},
+};
+
+// Function to print the details of each lick
+void print_lick(struct Lick* lick) {
+    printf("Time Signature: %d/%d\n", lick->time_sig_num, lick->time_sig_denom);
+    printf("Lick Length: %d measure(s)\n", lick->length);
+    printf("Energy Level: %d\n", lick->energy_level);
+    printf("Number of Notes: %d\n", lick->num_notes);
+    printf("Notes:\n");
+
+    for (int i = 0; i < lick->num_notes; i++) {
+        printf("  Note %d: Index = %d, Duration = %.1f, Velocity = %d\n",
+               i + 1, lick->data[i].note_index,
+               lick->data[i].duration,
+               lick->data[i].velocity);
+    }
+}
+
+// Function to filter and return all licks with energy_level == 1
+void filter_licks_by_energy_level(struct Lick* bank, int size, int target_energy_level) {
+    printf("\nLicks with energy level %d:\n", target_energy_level);
+    
+    for (int i = 0; i < size; i++) {
+        if (bank[i].energy_level == target_energy_level) {
+            print_lick(&bank[i]);  // Print the matching lick
+        }
+    }
+}
+
+
+struct Lick** pick_licks_by_criteria(struct Lick* bank, int size, int target_energy_level, int target_time_sig_num, int target_time_sig_denom, int* result_count) {
+    // Dynamically allocate memory for an array of Lick pointers (a list)
+    struct Lick** result = (struct Lick**)malloc(size * sizeof(struct Lick*)); // Max possible matches
+    *result_count = 0;  // Initialize result count
+
+    // Iterate over the bank of licks to find matching licks
+    for (int i = 0; i < size; i++) {
+        if (bank[i].energy_level == target_energy_level &&
+            bank[i].time_sig_num == target_time_sig_num &&
+            bank[i].time_sig_denom == target_time_sig_denom) {
+            
+            // Store the pointer to the matching lick in the result array
+            result[*result_count] = &bank[i];
+            (*result_count)++;  // Increment the result count
+        }
+    }
+
+    // If no matches, return NULL
+    if (*result_count == 0) {
+        free(result);  // Free allocated memory if no matches
+        return NULL;
+    }
+
+    return result;  // Return the list of matching licks
+}
+
+
+int update_bpm(int bpm){
+  //get hour from RTC and convert to int
+  int hour = static_cast<int>(myRTC.getHour(h12Flag, pmFlag)); //0, 0 for 24 hour mode
+  //Serial.print(hour);
+
+  if(hour < 10){
+    bpm = static_cast<int>(0.8*bpm);
+  }else if(hour < 14){
+    bpm = static_cast<int>(1.1*bpm); //change nothing
+  }else if(hour < 22){
+    bpm = static_cast<int>(1.2*bpm);
+  }
+  //Serial.println(bpm);
+  return bpm;
+}
+
+const int lick_mode_threshold = 80;
+
+int get_next_note_idx_from_sensors(){
+  int num_selected_notes = 0;
+
+  for(int i=0; i<8; i++){
+    if(sensor_values[i] > lick_mode_threshold){
+      next_note_selection_array[i] = 1; //now this note is available to be played;
+      num_selected_notes++;
+    }else{
+      next_note_selection_array[i] = 0; //need to set back to zero if sensor value is below threshold
+    }
+    Serial.println(next_note_selection_array[i]);
+  }
+
+  int temp = static_cast<int>round(R.uniform(0.5, num_selected_notes+0.499));
+  int count = 0;
+  Serial.print("temp value for sensor note selection: ");
+  Serial.println(temp);
+  for(int i=0; i<8; i++){
+    if(next_note_selection_array[i]){ // this shouldn't be met if no notes are selected
+      count++; // increment count if note is selected 
+      if(temp == count){
+        return i;
       }
-      */
+    }
+  }
 
+  return -1; // return -1 if no note is seleted
+}
 
+int get_velocity_from_sensors(int note_idx){
+  int val = sensor_values[note_idx];
+  if(val > lick_mode_threshold){
+    if(val < 140){
+      return 1;
+    }else if(val < 200){
+      return 2;
+    }else if(val <= 255){
+      return 3;   
+    }
+  }
+  return 2;
+}
+
+// Time-based responses for drum
+int get_lick_wait_period(int bpm, int time_sig_num, int time_sig_denom){
+  int hour = static_cast<int>(myRTC.getHour(h12Flag, pmFlag));
+  int num_measures = 0;
+  Serial.print("Hour: ");
+  Serial.println(hour);
+  if(hour < 10){
+    num_measures = 16;
+  }else if(hour < 14){
+    num_measures = 8; //change nothing
+  }else if(hour < 18){
+    num_measures = 4;
+  }else{
+    num_measures = 16;
+  }
+
+  int max_sensor_val = 0;
+  for(int i=0; i<8; i++){
+    // want to read max sensor_val and have it be 
+    if(sensor_values[i] > max_sensor_val && sensor_values[i] > lick_mode_threshold){
+      max_sensor_val = sensor_values[i];
+    }
+  }
+  float sensor_mult = (255 - max_sensor_val) / 255.0; // want this to reduce 
+  num_measures = static_cast<int>(sensor_mult * num_measures);
+
+  int num_sixteenths = num_measures * (time_sig_num*(4.0/time_sig_denom)*4);
+  if(num_sixteenths == 0){
+    return 0;
+  }
+
+  //final 4 is for converting time sig into sixteenth note units
+  Serial.print("Number of measures to wait: ");
+  Serial.println(num_measures);
+  double denom = (4.0 * bpm / num_sixteenths / 60);
+  if(denom == 0){
+    return 0;
+  }
+  Serial.print("Denominator (DEBUG): ");
+  Serial.println(denom);
+  int wait_period = static_cast<int>(1000 / denom);
+  return wait_period;
+}
+
+int update_energy_level() {
+  int hour = static_cast<int>(myRTC.getHour(h12Flag, pmFlag));
+  if(hour < 10){
+    return 1;
+  }else if(hour < 14){
+    return 2;
+  }else if(hour < 18){
+    return 3;
+  }else{
+    return 1;
+  }
+}
+
+/***********************************************************
+ * Function: Note* play_licks()
+ * Description: Called from main. Needs external inputs 
+ ***********************************************************/
+void play_licks(int energy_level, int time_sig_num, int time_sig_denom, Prandom R, int bpm){
+  int rand_note_index = 0;
+  int cur_note_on_time = millis();
+  int cur_note_off_time = 999999999;
+  bool next_note_ready = 1;
+  struct Lick cur_lick;
+
+  int orig_bpm = bpm;
+  bool play_another_lick = 1;
+  int result_count = 0;
+  int lick_wait_period = 0;
+  int previous_millis = 0;
+    
+  // play until some condition is met, TBD?
+  while (play_another_lick){
+    if(digitalRead(AUTO_PIN) != LOW){
+      break;
+    }
+    
+    read_sensor_vals(); 
+    bpm = update_bpm(orig_bpm);
+    Serial.print("BPM: ");
+    Serial.println(bpm);
+
+    // these use clock's hour value to update their values accordingly
+    lick_wait_period = get_lick_wait_period(bpm, time_sig_num, time_sig_denom);
+    //energy_level = update_energy_level();
+
+    Serial.print("Lick wait period: ");
+    Serial.println(lick_wait_period);
+    Serial.print("Energy level: ");
+    Serial.println(energy_level);
+
+    Serial.println("New Lick");
+    result_count = 0;
+
+    // Pick all licks with passed energy level
+    struct Lick** matching_licks = pick_licks_by_criteria(Bank_of_licks, BoL_len, energy_level, time_sig_num, time_sig_denom, &result_count);
+
+    if (matching_licks != NULL) {
+        printf("Found %d matching licks:\n", result_count);
+        // Print the matching licks
+        for (int i = 0; i < result_count; i++) {
+            print_lick(matching_licks[i]);
+            // WANT TO CHOOSE LICK SOMEHOW
+            int rnd_lick_idx = static_cast<int>(round(R.uniform(-0.5, result_count-0.5)));
+            cur_lick = *matching_licks[rnd_lick_idx];
+        }
+        free(matching_licks);  // Free memory after use
+    } else {
+        printf("No matching licks found with the given criteria.\n");
+        printf("Please add more licks to the bank of licks.\n");
+    }
+
+    int j = 0;
+    Note cur_note;
+    
+    if(millis() - previous_millis >= lick_wait_period){
+      
+      //play the lick, iterating through the notes
+      while(j < cur_lick.num_notes){
+
+        read_sensor_vals(); 
+
+        //only get note when ready, prevents overriding index with other values, 
+        if(next_note_ready){
+
+          cur_note = cur_lick.data[j];
+          cur_note.note_index = get_unscrambled_idx(cur_note.note_index); //update with unscrambled value
+
+          // some chance to use markov matrices to determine the note based on previous (increase variety)
+          if(j > 0 && static_cast<int>round(R.uniform(0, 0.7))){
+            cur_note.note_index = getNextNoteIndex(cur_lick.data[j-1].note_index, 2, R);
+          }
+
+          // only update if someone is next to the drum and is close enough
+          // fn returns -1 if no notes are selected
+          int selected_note_idx = get_next_note_idx_from_sensors();
+          if(selected_note_idx >= 0){
+            cur_note.note_index = selected_note_idx;
+          }
+
+          cur_note.velocity = get_velocity_from_sensors(cur_note.note_index);
+        
+        }
+
+        update_note_timers(note_inactive_arr, cur_note);
+
+        if(note_inactive_arr[cur_note.note_index] && next_note_ready){
+          send_SPI_message_on(cur_note); //send SPI message for note on
+          note_inactive_arr[cur_note.note_index] = 0;
+          cur_note_on_time = millis();
+          next_note_ready = 0;
+
+          Serial.print("Lick note on at (ms): ");
+          Serial.println(cur_note_on_time);
+        }
+
+        if ((!note_inactive_arr[cur_note.note_index]) && (millis() - cur_note_on_time >= get_solenoid_on_delay(cur_note.velocity)) && !next_note_ready) {
+          send_SPI_message_off(cur_note);  // Send SPI message to turn off the note
+          note_inactive_arr[cur_note.note_index] = 1;                 // Mark the note as no longer active
+          Serial.print("Auto note off at (ms): ");
+          Serial.println(millis());
+          Serial.println();
+        }
+
+        if(millis() - cur_note_on_time >= 1000 / (4.0 * bpm / cur_note.duration / 60)){
+          next_note_ready = 1;
+          j++;
+        }
+          
+      };
+
+      Serial.print("Lick Finished!!\n");
+      previous_millis = millis(); //update previous_millis now that lick is finished
+    }
+
+    if(rand_note_index == -1)
+      break;
+
+  };
+}
