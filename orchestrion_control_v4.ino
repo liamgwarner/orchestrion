@@ -105,7 +105,7 @@ void loop() {
     delay(2000);
     */
 
-    play_licks(3, 4, 4, R, bpm);
+    play_licks(2, 4, 4, R, bpm);
   
     //DO IF SENSOR MODE
   }else if(digitalRead(SENSOR_PIN) == LOW && !(fault_detected)){

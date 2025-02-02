@@ -25,6 +25,7 @@
 #include <SPI.h>
 #include <Adafruit_ADS7830.h>
 #include <DS3231.h>
+#include <algorithm>
 
 
 //1 MHz SPI clock, shifts in data MSB first, data mode is 0
@@ -49,6 +50,11 @@ struct Note {
 };
 
 static int this_note_time = millis(); //DEBUG PURPOSES           
+static int past_time = millis();
+
+const int lick_mode_sensor_threshold = 80;
+static int lick_mode_inactivity_timer = millis();
+static bool tried_to_grab_attention = 0;
 
 // Note index corresponds to available_notes array, 1 for available/inactive, 0 for unavailable/active
 static int note_inactive_arr[8] = {1, 1, 1, 1, 1, 1, 1, 1};
@@ -131,6 +137,12 @@ static int next_note_selection_array[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 //stores sensor values for associated notes in avaiable_notes array
 //also associated with ADC channels 0-7 respectively
 static uint8_t sensor_values[8] = {0};
+
+// past sensor values are updated every 100ms to get rate of change estimate for sensor values
+// which is effectively how fast someone is moving their hand
+static uint8_t past_sensor_values[8] = {0};
+
+static int sensor_rate_of_change[8] = {0}; // updates every 
 
 
 /***********************************************************
@@ -509,6 +521,31 @@ void read_sensor_vals(){
      Serial.println(sensor_values[i]);
     
   }
+
+  uint8_t sampling_period = 100; // how long between sensor value samples (ms)
+  
+  //static uint8_t sensor_rate_of_change[8] = {0}; // updates every 
+
+
+  //get past sensor values for rate of change estimate
+  if(past_time < millis() - sampling_period){
+    
+    past_time = millis();
+    Serial.println();
+    Serial.print("Change in sensor vals: ");
+  
+    for(int i=0; i<8; i++){
+      sensor_rate_of_change[i] = sensor_values[i] - past_sensor_values[i]; //update rate of change
+      past_sensor_values[i] = sensor_values[i]; // now update past with current
+      
+      Serial.print(sensor_rate_of_change[i]);
+      Serial.print(" ");
+    }
+    Serial.println();
+    
+    // after rate of change is updated, now update the past sensor values
+    //std::copy(sensor_values, sensor_values+8, past_sensor_values); //copies past sensor values to 
+  }
 }
 
 void check_sensors(){
@@ -815,7 +852,7 @@ struct Lick {
     struct Note data[MAX_NOTES];  // Predefined array of notes (up to MAX_NOTES)
 };
 
-const int BoL_len = 18;
+const int BoL_len = 19;
 
 // Integer conversion here: 60=C4, 61=C#4/Db4, 62=D, 63=D#/Eb, 64=E, 65=F, 66=F#/Gb, 67=G, 68=G#/Ab, 69=A, 70=A#/Bb, 71=B
 //const int available_notes[8] = {60, 69, 67, 75, 63, 74, 62, 72};
@@ -828,7 +865,6 @@ int get_unscrambled_idx(int idx){
   std::vector<int> mapping = {0, 6, 4, 2, 1, 7, 5, 3};
   return mapping[idx];
 }
-
 
 // Static bank of licks with predefined notes and variable note count
 // NOTE: bank of licks is programmed with unscrambled indicies using
@@ -860,6 +896,10 @@ struct Lick Bank_of_licks[BoL_len] = {
     // 3/4
     {3, 4, 1, 3, 6, {{0, 3, 2}, {1, 3, 2}, {2, 3, 2}, {3, 3, 2}, {4, 3, 2}, {5, 3, 2}}},
     {7, 4, 2, 3, 8, {{0, 7, 2}, {1, 7, 2}, {2, 7, 2}, {3, 7, 2}, {4, 7, 2}, {5, 7, 2}}},
+
+    // Special energy level 4 lick for inactivity:
+    {4, 4, 1, 4, 8, {{0, 0.25, 2}, {1, 0.25, 2}, {2, 0.25, 2}, {3, 0.25, 2}, {4, 0.25, 2}, {5, 0.25, 2}, {6, 0.25, 2}, {7, 0.25, 2}}},
+
 };
 
 // Function to print the details of each lick
@@ -933,13 +973,11 @@ int update_bpm(int bpm){
   return bpm;
 }
 
-const int lick_mode_threshold = 80;
-
 int get_next_note_idx_from_sensors(){
   int num_selected_notes = 0;
 
   for(int i=0; i<8; i++){
-    if(sensor_values[i] > lick_mode_threshold){
+    if(sensor_values[i] > lick_mode_sensor_threshold){
       next_note_selection_array[i] = 1; //now this note is available to be played;
       num_selected_notes++;
     }else{
@@ -966,7 +1004,7 @@ int get_next_note_idx_from_sensors(){
 
 int get_velocity_from_sensors(int note_idx){
   int val = sensor_values[note_idx];
-  if(val > lick_mode_threshold){
+  if(val > lick_mode_sensor_threshold){
     if(val < 140){
       return 1;
     }else if(val < 200){
@@ -997,7 +1035,7 @@ int get_lick_wait_period(int bpm, int time_sig_num, int time_sig_denom){
   int max_sensor_val = 0;
   for(int i=0; i<8; i++){
     // want to read max sensor_val and have it be 
-    if(sensor_values[i] > max_sensor_val && sensor_values[i] > lick_mode_threshold){
+    if(sensor_values[i] > max_sensor_val && sensor_values[i] > lick_mode_sensor_threshold){
       max_sensor_val = sensor_values[i];
     }
   }
@@ -1024,6 +1062,7 @@ int get_lick_wait_period(int bpm, int time_sig_num, int time_sig_denom){
 
 int update_energy_level() {
   int hour = static_cast<int>(myRTC.getHour(h12Flag, pmFlag));
+  Serial.println(hour);
   if(hour < 10){
     return 1;
   }else if(hour < 14){
@@ -1035,6 +1074,31 @@ int update_energy_level() {
   }
 }
 
+
+int check_sensor_inactivity(int energy_level) {
+  for(int i=0; i<8; i++){
+    if(sensor_values[i] > lick_mode_sensor_threshold || tried_to_grab_attention){
+      lick_mode_inactivity_timer = millis();
+      tried_to_grab_attention = 0;
+      return update_energy_level();
+    }
+  }
+
+  int inactivity_wait_time = 5000;
+
+  if(energy_level == 4){
+    return update_energy_level();
+  }else if(lick_mode_inactivity_timer < millis() - inactivity_wait_time){
+    tried_to_grab_attention = 1;
+    return 4; // return special energy level
+  }else{
+    return update_energy_level();
+  }
+
+}
+
+
+
 /***********************************************************
  * Function: Note* play_licks()
  * Description: Called from main. Needs external inputs 
@@ -1042,7 +1106,7 @@ int update_energy_level() {
 void play_licks(int energy_level, int time_sig_num, int time_sig_denom, Prandom R, int bpm){
   int rand_note_index = 0;
   int cur_note_on_time = millis();
-  int cur_note_off_time = 999999999;
+  int cur_note_off_time = 2147483647; //max value on int
   bool next_note_ready = 1;
   struct Lick cur_lick;
 
@@ -1051,6 +1115,7 @@ void play_licks(int energy_level, int time_sig_num, int time_sig_denom, Prandom 
   int result_count = 0;
   int lick_wait_period = 0;
   int previous_millis = 0;
+  
     
   // play until some condition is met, TBD?
   while (play_another_lick){
@@ -1059,13 +1124,15 @@ void play_licks(int energy_level, int time_sig_num, int time_sig_denom, Prandom 
     }
     
     read_sensor_vals(); 
+
     bpm = update_bpm(orig_bpm);
     Serial.print("BPM: ");
     Serial.println(bpm);
 
     // these use clock's hour value to update their values accordingly
     lick_wait_period = get_lick_wait_period(bpm, time_sig_num, time_sig_denom);
-    //energy_level = update_energy_level();
+    energy_level = update_energy_level();
+    //energy_level = check_sensor_inactivity(energy_level);
 
     Serial.print("Lick wait period: ");
     Serial.println(lick_wait_period);
