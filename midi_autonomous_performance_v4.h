@@ -47,6 +47,7 @@ struct Note {
   int note_index;
   float duration; //rounded to nearest 0.5 (eighth note)
   int velocity; //1, 2, 3
+  int probability; //0 to 100, IRRELEVANT except for licks
 };
 
 static int this_note_time = millis(); //DEBUG PURPOSES           
@@ -843,6 +844,7 @@ Note* autonomous_seq_generation(Note* song, int energy_level, int song_length, i
 #define MAX_NOTES 16
 
 // Define the Lick struct with a statically sized array of Notes
+/*
 struct Lick {
     int time_sig_num;     // time signature numerator
     int time_sig_denom;   // time signature denominator
@@ -850,6 +852,17 @@ struct Lick {
     int energy_level;
     int num_notes;        // Number of Notes in this lick
     struct Note data[MAX_NOTES];  // Predefined array of notes (up to MAX_NOTES)
+};
+*/
+
+struct Lick {
+    int time_sig_num;     // time signature numerator
+    int time_sig_denom;   // time signature denominator
+    int length;           // length of lick in measures
+    int energy_level;
+    int num_notes;        // Number of Notes in this lick
+    //struct Note data[MAX_NOTES];  // Predefined array of notes (up to MAX_NOTES)
+    std::vector<Note> data;
 };
 
 const int BoL_len = 19;
@@ -870,37 +883,87 @@ int get_unscrambled_idx(int idx){
 // NOTE: bank of licks is programmed with unscrambled indicies using
 struct Lick Bank_of_licks[BoL_len] = {
     // 4/4 
-    {4, 4, 1, 1, 5, {{0, 4, 2}, {1, 2, 2}, {2, 2, 2}, {3, 4, 2}, {4, 4, 2}}},
-    {4, 4, 1, 1, 3, {{0, 2, 3}, {1, 2, 3}, {2, 12, 2}}},
-    {4, 4, 1, 1, 4, {{5, 4, 1}, {2, 4, 1}, {5, 2, 1}, {3, 6, 1}}},    
-    {4, 4, 1, 1, 4, {{6, 4, 2}, {1, 4, 2}, {2, 4, 2}, {3, 4, 2}}},
-    {4, 4, 1, 1, 4, {{5, 4, 2}, {2, 4, 2}, {2, 4, 2}, {3, 4, 2}}},
-    {4, 4, 2, 1, 5, {{3, 4, 2}, {1, 4, 2}, {2, 4, 2}, {3, 4, 2}, {4, 4, 2}}},
+    {4, 4, 1, 1, 5, {{0, 4, 2, 100}, {1, 2, 2, 100}, {2, 2, 2, 100}, {3, 4, 2, 100}, {4, 4, 2, 100}}},
+    {4, 4, 1, 1, 3, {{0, 2, 3, 100}, {1, 2, 3, 100}, {2, 12, 2, 100}}},
+    {4, 4, 1, 1, 4, {{5, 4, 1, 100}, {2, 4, 1, 100}, {5, 2, 1, 100}, {3, 6, 1, 100}}},    
+    {4, 4, 1, 1, 4, {{6, 4, 2, 100}, {1, 4, 2, 100}, {2, 4, 2, 100}, {3, 4, 2, 100}}},
+    {4, 4, 1, 1, 4, {{5, 4, 2, 100}, {2, 4, 2, 100}, {2, 4, 2, 100}, {3, 4, 2, 100}}},
+    {4, 4, 2, 1, 5, {{3, 4, 2, 100}, {1, 4, 2, 100}, {2, 4, 2, 100}, {3, 4, 2, 100}, {4, 4, 2, 100}}},
+  
+    {4, 4, 2, 2, 12, {{5, 4, 2, 100}, {3, 2, 2, 100}, {5, 2, 2, 100}, {4, 4, 2, 100}, {3, 2, 2, 100}, {2, 2, 2, 100}, {1, 2, 2, 100}, {2, 2, 2, 100}, {0, 4, 2, 100}, {1, 2, 2, 100}, {6, 2, 2, 100}, {5, 4, 2, 100}}},
+    {4, 4, 1, 2, 6, {{2, 4, 2, 100}, {3, 3, 2, 100}, {5, 3, 2, 100}, {4, 1, 2, 100}, {1, 1, 2, 100}, {0, 4, 2, 100}}}, 
+    {4, 4, 1, 2, 8, {{5, 2, 2, 100}, {4, 2, 2, 100}, {3, 2, 2, 100}, {2, 1, 2, 100}, {1, 1, 2, 100}, {0, 2, 2, 100}, {5, 2, 2, 100}, {3, 4, 2, 100}}},
 
-    {4, 4, 2, 2, 12, {{5, 4, 2}, {3, 2, 2}, {5, 2, 2}, {4, 4, 2}, {3, 2, 2}, {2, 2, 2}, {1, 2, 2}, {2, 2, 2}, {0, 4, 2}, {1, 2, 2}, {6, 2, 2}, {5, 4, 2}}},
-    {4, 4, 1, 2, 6, {{2, 4, 2}, {3, 3, 2}, {5, 3, 2}, {4, 1, 2}, {1, 1, 2}, {0, 4, 2}}},
-    {4, 4, 1, 2, 8, {{5, 2, 2}, {4, 2, 2}, {3, 2, 2}, {2, 1, 2}, {1, 1, 2}, {0, 2, 2}, {5, 2, 2}, {3, 4, 2}}},
-
-    {4, 4, 1, 3, 13, {{0, 1, 2}, {1, 1, 2}, {2, 2, 2}, {3, 1, 2}, {4, 1, 2}, {5, 1, 2}, {6, 1, 2}, {7, 2, 2}, {2, 1, 2}, {0, 1, 2}, {1, 2, 2}, {5, 1, 2}, {7, 1, 2}}},
-    {4, 4, 2, 3, 12, {{0, 2, 0}, {0, 2, 2}, {2, 2, 2}, {3, 2, 2,}, {4, 2, 2,}, {3, 2, 2}, {4, 2, 2}, {2, 2, 2}, {3, 2, 2}, {2, 2, 2}, {0, 2, 2}, {0, 2, 10}}},
-    {4, 4, 1, 3, 10, {{0, 4, 0}, {0, 1.333, 2}, {3, 1.333, 2}, {5, 1.333, 2}, {0, 1.333, 2,}, {3, 1.333, 2,}, {5, 1.333, 2}, {0, 1.333, 2}, {3, 1.333, 2}, {5, 1.333, 2}, {0, 1.333, 2,}, {3, 1.333, 2,}, {5, 1.333, 2}}},
+    {4, 4, 1, 3, 13, {{0, 1, 2, 100}, {1, 1, 2, 100}, {2, 2, 2, 100}, {3, 1, 2, 100}, {4, 1, 2, 100}, {5, 1, 2, 100}, {6, 1, 2, 100}, {7, 2, 2, 100}, {2, 1, 2, 100}, {0, 1, 2, 100}, {1, 2, 2, 100}, {5, 1, 2, 100}, {7, 1, 2, 100}}},
+    {4, 4, 2, 3, 12, {{0, 2, 0, 100}, {0, 2, 2, 100}, {2, 2, 2, 100}, {3, 2, 2, 100}, {4, 2, 2, 100}, {3, 2, 2, 100}, {4, 2, 2, 100}, {2, 2, 2, 100}, {3, 2, 2, 100}, {2, 2, 2, 100}, {0, 2, 2, 100}, {0, 2, 10, 100}}},
+    {4, 4, 1, 3, 10, {{0, 4, 0, 100}, {0, 1.333, 2, 100}, {3, 1.333, 2, 100}, {5, 1.333, 2, 100}, {0, 1.333, 2, 100}, {3, 1.333, 2, 100}, {5, 1.333, 2, 100}, {0, 1.333, 2, 100}, {3, 1.333, 2, 100}, {5, 1.333, 2, 100}, {0, 1.333, 2, 100}, {3, 1.333, 2,}, {5, 1.333, 2, 100}}},
 
     // 6/8
-    {6, 8, 1, 1, 6, {{0, 6, 2}, {1, 6, 2}, {2, 6, 2}, {3, 6, 2}, {4, 6, 2}, {5, 6, 2}}},
-    {6, 8, 2, 1, 8, {{0, 6, 2}, {1, 6, 2}, {2, 6, 2}, {3, 6, 2}, {4, 6, 2}, {5, 6, 2}, {6, 6, 2}, {7, 6, 2}}},
+    {6, 8, 1, 1, 6, {{0, 6, 2, 100}, {1, 6, 2, 100}, {2, 6, 2, 100}, {3, 6, 2, 100}, {4, 6, 2, 100}, {5, 6, 2, 100}}},
+    {6, 8, 2, 1, 8, {{0, 6, 2, 100}, {1, 6, 2, 100}, {2, 6, 2, 100}, {3, 6, 2, 100}, {4, 6, 2, 100}, {5, 6, 2, 100}, {6, 6, 2, 100}, {7, 6, 2, 100}}},
 
     // 5/4
-    {5, 4, 1, 2, 5, {{0, 5, 2}, {1, 5, 2}, {2, 5, 2}, {3, 5, 2}, {4, 5, 2}}},
-    {5, 4, 3, 2, 6, {{0, 4, 2}, {1, 4, 2}, {2, 4, 2}, {3, 4, 2}, {4, 4, 2}, {5, 4, 2}}},
+    {5, 4, 1, 2, 5, {{0, 5, 2, 100}, {1, 5, 2, 100}, {2, 5, 2, 100}, {3, 5, 2, 100}, {4, 5, 2, 100}}},
+    {5, 4, 3, 2, 6, {{0, 4, 2, 100}, {1, 4, 2, 100}, {2, 4, 2, 100}, {3, 4, 2, 100}, {4, 4, 2, 100}, {5, 4, 2, 100}}},
 
     // 3/4
-    {3, 4, 1, 3, 6, {{0, 3, 2}, {1, 3, 2}, {2, 3, 2}, {3, 3, 2}, {4, 3, 2}, {5, 3, 2}}},
-    {7, 4, 2, 3, 8, {{0, 7, 2}, {1, 7, 2}, {2, 7, 2}, {3, 7, 2}, {4, 7, 2}, {5, 7, 2}}},
+    {3, 4, 1, 3, 6, {{0, 3, 2, 100}, {1, 3, 2, 100}, {2, 3, 2, 100}, {3, 3, 2, 100}, {4, 3, 2, 100}, {5, 3, 2, 100}}},
+    {7, 4, 2, 3, 8, {{0, 7, 2, 100}, {1, 7, 2, 100}, {2, 7, 2, 100}, {3, 7, 2, 100}, {4, 7, 2, 100}, {5, 7, 2, 100}}},
 
     // Special energy level 4 lick for inactivity:
-    {4, 4, 1, 4, 8, {{0, 0.25, 2}, {1, 0.25, 2}, {2, 0.25, 2}, {3, 0.25, 2}, {4, 0.25, 2}, {5, 0.25, 2}, {6, 0.25, 2}, {7, 0.25, 2}}},
-
+    {4, 4, 1, 4, 8, {{0, 0.25, 2, 100}, {1, 0.25, 2, 100}, {2, 0.25, 2, 100}, {3, 0.25, 2, 100}, {4, 0.25, 2, 100}, {5, 0.25, 2, 100}, {6, 0.25, 2, 100}, {7, 0.25, 2, 100}}}
 };
+
+// TO DO: Incorporate logic for each lick to add/subtract additional notes or put it back to its default state
+// Function to add a note to the lick, determining parameters
+void add_note_to_lick(Lick& lick, int position) {
+
+  if (position >= 0 && position <= lick.data.size()) {
+    // Determine new note based on current note
+    Note new_note;
+    
+    // gets half the duration 
+    new_note.duration = lick.data[position].duration / 2;
+
+    // same velocity
+    new_note.velocity = lick.data[position].velocity;
+
+    // gets probability of 100 FOR NOW
+    new_note.probability = 100;
+    
+    // now determine its note value
+    int cur_index = lick.data[position].note_index;
+    int max_interval = 1; // set max distance between grace notes
+
+    if(cur_index == 0){
+      new_note.note_index = static_cast<int>round(R.uniform(cur_index - 0.5, cur_index + max_interval + 0.499));
+    }else if (cur_index == 7){
+      new_note.note_index = static_cast<int>round(R.uniform(cur_index - max_interval - 0.5, cur_index + 0.499));
+    }else{
+      new_note.note_index = static_cast<int>round(R.uniform(cur_index - max_interval - 0.5, cur_index + max_interval + 0.499));
+    }
+
+    bool after;
+    after = static_cast<int>round(R.uniform(0, 1));
+    
+    // want to insert after if position is zero and NOT when its the last note, randomly chosen otherwise
+    if((after || position == 0) && position != lick.data.size() - 1){
+      lick.data[position].duration = lick.data[position].duration / 2;
+      lick.data.insert(lick.data.begin() + position + 1, new_note);
+    // otherwise before is fine
+    }else{ 
+      lick.data[position - 1].duration = lick.data[position - 1].duration / 2; // always want to adjust the preceding note's duration
+      lick.data.insert(lick.data.begin() + position, new_note);
+    }
+    
+    lick.num_notes = lick.data.size();
+  }
+}
+    // Update num_notes to reflect the new count
+
+
+
+
 
 // Function to print the details of each lick
 void print_lick(struct Lick* lick) {
@@ -1086,9 +1149,8 @@ int check_sensor_inactivity(int energy_level) {
   
   int inactivity_wait_time = 5000;
 
-  if(tried_to_grab_attnetion){
+  if(tried_to_grab_attention){
     return update_energy_level();
-  
   //tried_to_grab_attention
   }else if(lick_mode_inactivity_timer < millis() - inactivity_wait_time && !tried_to_grab_attention){
     tried_to_grab_attention = 1;
@@ -1160,6 +1222,11 @@ void play_licks(int energy_level, int time_sig_num, int time_sig_denom, Prandom 
     } else {
         printf("No matching licks found with the given criteria.\n");
         printf("Please add more licks to the bank of licks.\n");
+    }
+
+    if(static_cast<int>(round(R.uniform(0, 1)))){
+      // randomly select 
+      add_note_to_lick(cur_lick, static_cast<int>(round(R.uniform(-0.5, cur_lick.num_notes + 0.499))));
     }
 
     int j = 0;
