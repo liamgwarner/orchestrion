@@ -142,7 +142,7 @@ static uint8_t sensor_values[8] = {0};
 // which is effectively how fast someone is moving their hand
 static uint8_t past_sensor_values[8] = {0};
 
-static int sensor_rate_of_change[8] = {0}; // updates every 
+static int sensor_rate_of_change[8] = {0}; // see
 
 
 /***********************************************************
@@ -1074,21 +1074,23 @@ int update_energy_level() {
   }
 }
 
-
 int check_sensor_inactivity(int energy_level) {
+  
   for(int i=0; i<8; i++){
-    if(sensor_values[i] > lick_mode_sensor_threshold || tried_to_grab_attention){
+    if(sensor_values[i] > lick_mode_sensor_threshold){
       lick_mode_inactivity_timer = millis();
       tried_to_grab_attention = 0;
       return update_energy_level();
     }
   }
-
+  
   int inactivity_wait_time = 5000;
 
-  if(energy_level == 4){
+  if(tried_to_grab_attnetion){
     return update_energy_level();
-  }else if(lick_mode_inactivity_timer < millis() - inactivity_wait_time){
+  
+  //tried_to_grab_attention
+  }else if(lick_mode_inactivity_timer < millis() - inactivity_wait_time && !tried_to_grab_attention){
     tried_to_grab_attention = 1;
     return 4; // return special energy level
   }else{
@@ -1165,12 +1167,14 @@ void play_licks(int energy_level, int time_sig_num, int time_sig_denom, Prandom 
     
     if(millis() - previous_millis >= lick_wait_period){
       
+      // PLAYING LICK
+
       //play the lick, iterating through the notes
       while(j < cur_lick.num_notes){
 
         read_sensor_vals(); 
 
-        //only get note when ready, prevents overriding index with other values, 
+        //only get note when ready, prevents overriding index with other values
         if(next_note_ready){
 
           cur_note = cur_lick.data[j];
@@ -1181,6 +1185,7 @@ void play_licks(int energy_level, int time_sig_num, int time_sig_denom, Prandom 
             cur_note.note_index = getNextNoteIndex(cur_lick.data[j-1].note_index, 2, R);
           }
 
+          // SENSORS ACTIVE
           // only update if someone is next to the drum and is close enough
           // fn returns -1 if no notes are selected
           int selected_note_idx = get_next_note_idx_from_sensors();
