@@ -338,11 +338,11 @@ void send_SPI_message_off(Note cur_note){
 }
 
 /***********************************************************
- * Function: update_note_timers(int note_inactive_arr[], Note cur_note)
+ * Function: update_note_timers(int note_inactive_arr[])
  * Description: Updates the note_timers array for notes that
  * are "off" (not currently being actuated).
  ***********************************************************/
-void update_note_timers(int note_inactive_arr[], Note cur_note){
+void update_note_timers(int note_inactive_arr[]){
   for(int i=0; i<8; i++){
     // Only updates timers for notes that are off
     // Notes that are on retain timer value from when they were turned on
@@ -354,11 +354,6 @@ void update_note_timers(int note_inactive_arr[], Note cur_note){
       Serial.print(": ");
       Serial.println(note_timers[i]);
       */
-    }else{
-      //FOR DEBUG!
-      //Serial.print("Note is still on: ");
-      //Serial.println(i);
-      
     }
   }
 }
@@ -516,10 +511,10 @@ void read_sensor_vals(){
   for(int i=0; i<8; i++){
      sensor_values[i] = ad7830.readADCsingle(i); //reading channel i
      
-     Serial.print("Sensor value CH");
-     Serial.print(i);
-     Serial.print(": ");
-     Serial.println(sensor_values[i]);
+     //Serial.print("Sensor value CH");
+     //Serial.print(i);
+     //Serial.print(": ");
+     //Serial.println(sensor_values[i]);
     
   }
 
@@ -532,17 +527,17 @@ void read_sensor_vals(){
   if(past_time < millis() - sampling_period){
     
     past_time = millis();
-    Serial.println();
-    Serial.print("Change in sensor vals: ");
+    //Serial.println();
+    //Serial.print("Change in sensor vals: ");
   
     for(int i=0; i<8; i++){
       sensor_rate_of_change[i] = sensor_values[i] - past_sensor_values[i]; //update rate of change
       past_sensor_values[i] = sensor_values[i]; // now update past with current
       
-      Serial.print(sensor_rate_of_change[i]);
-      Serial.print(" ");
+      //Serial.print(sensor_rate_of_change[i]);
+      //Serial.print(" ");
     }
-    Serial.println();
+    //Serial.println();
     
     // after rate of change is updated, now update the past sensor values
     //std::copy(sensor_values, sensor_values+8, past_sensor_values); //copies past sensor values to 
@@ -861,6 +856,7 @@ struct Lick {
     int length;           // length of lick in measures
     int energy_level;
     int num_notes;        // Number of Notes in this lick
+    int orig_num_notes;
     //struct Note data[MAX_NOTES];  // Predefined array of notes (up to MAX_NOTES)
     std::vector<Note> data;
 };
@@ -880,89 +876,140 @@ int get_unscrambled_idx(int idx){
 }
 
 // Static bank of licks with predefined notes and variable note count
-// NOTE: bank of licks is programmed with unscrambled indicies using
+// NOTE: bank of licks is programmed with ordered indicies which map to correct SPI indicies using above mapping 
 struct Lick Bank_of_licks[BoL_len] = {
     // 4/4 
-    {4, 4, 1, 1, 5, {{0, 4, 2, 100}, {1, 2, 2, 100}, {2, 2, 2, 100}, {3, 4, 2, 100}, {4, 4, 2, 100}}},
-    {4, 4, 1, 1, 3, {{0, 2, 3, 100}, {1, 2, 3, 100}, {2, 12, 2, 100}}},
-    {4, 4, 1, 1, 4, {{5, 4, 1, 100}, {2, 4, 1, 100}, {5, 2, 1, 100}, {3, 6, 1, 100}}},    
-    {4, 4, 1, 1, 4, {{6, 4, 2, 100}, {1, 4, 2, 100}, {2, 4, 2, 100}, {3, 4, 2, 100}}},
-    {4, 4, 1, 1, 4, {{5, 4, 2, 100}, {2, 4, 2, 100}, {2, 4, 2, 100}, {3, 4, 2, 100}}},
-    {4, 4, 2, 1, 5, {{3, 4, 2, 100}, {1, 4, 2, 100}, {2, 4, 2, 100}, {3, 4, 2, 100}, {4, 4, 2, 100}}},
-  
-    {4, 4, 2, 2, 12, {{5, 4, 2, 100}, {3, 2, 2, 100}, {5, 2, 2, 100}, {4, 4, 2, 100}, {3, 2, 2, 100}, {2, 2, 2, 100}, {1, 2, 2, 100}, {2, 2, 2, 100}, {0, 4, 2, 100}, {1, 2, 2, 100}, {6, 2, 2, 100}, {5, 4, 2, 100}}},
-    {4, 4, 1, 2, 6, {{2, 4, 2, 100}, {3, 3, 2, 100}, {5, 3, 2, 100}, {4, 1, 2, 100}, {1, 1, 2, 100}, {0, 4, 2, 100}}}, 
-    {4, 4, 1, 2, 8, {{5, 2, 2, 100}, {4, 2, 2, 100}, {3, 2, 2, 100}, {2, 1, 2, 100}, {1, 1, 2, 100}, {0, 2, 2, 100}, {5, 2, 2, 100}, {3, 4, 2, 100}}},
+    {4, 4, 1, 1, 5, 5, {{0, 4, 2, 100}, {1, 2, 2, 100}, {2, 2, 2, 100}, {3, 4, 2, 100}, {4, 4, 2, 100}}},
+    {4, 4, 1, 1, 3, 3, {{0, 2, 3, 100}, {1, 2, 3, 100}, {2, 12, 2, 100}}},
+    {4, 4, 1, 1, 4, 4, {{5, 4, 1, 100}, {2, 4, 1, 100}, {5, 2, 1, 100}, {3, 6, 1, 100}}},    
+    {4, 4, 1, 1, 4, 4, {{6, 4, 2, 100}, {1, 4, 2, 100}, {2, 4, 2, 100}, {3, 4, 2, 100}}},
+    {4, 4, 1, 1, 4, 4, {{5, 4, 2, 100}, {2, 4, 2, 100}, {2, 4, 2, 100}, {3, 4, 2, 100}}},
+    
+    //{4, 4, 2, 1, 5, 5, {{3, 4, 2, 100}, {1, 4, 2, 100}, {2, 4, 2, 100}, {3, 4, 2, 100}, {4, 4, 2, 100}}},
+    //{4, 4, 2, 2, 12, 12, {{5, 4, 2, 100}, {3, 2, 2, 100}, {5, 2, 2, 100}, {4, 4, 2, 100}, {3, 2, 2, 100}, {2, 2, 2, 100}, {1, 2, 2, 100}, {2, 2, 2, 100}, {0, 4, 2, 100}, {1, 2, 2, 100}, {6, 2, 2, 100}, {5, 4, 2, 100}}},
+    //{4, 4, 1, 2, 6, 6, {{2, 4, 2, 100}, {3, 3, 2, 100}, {5, 3, 2, 100}, {4, 1, 2, 100}, {1, 1, 2, 100}, {0, 4, 2, 100}}}, 
+    //{4, 4, 1, 2, 8, 8, {{5, 2, 2, 100}, {4, 2, 2, 100}, {3, 2, 2, 100}, {2, 1, 2, 100}, {1, 1, 2, 100}, {0, 2, 2, 100}, {5, 2, 2, 100}, {3, 4, 2, 100}}},
 
-    {4, 4, 1, 3, 13, {{0, 1, 2, 100}, {1, 1, 2, 100}, {2, 2, 2, 100}, {3, 1, 2, 100}, {4, 1, 2, 100}, {5, 1, 2, 100}, {6, 1, 2, 100}, {7, 2, 2, 100}, {2, 1, 2, 100}, {0, 1, 2, 100}, {1, 2, 2, 100}, {5, 1, 2, 100}, {7, 1, 2, 100}}},
-    {4, 4, 2, 3, 12, {{0, 2, 0, 100}, {0, 2, 2, 100}, {2, 2, 2, 100}, {3, 2, 2, 100}, {4, 2, 2, 100}, {3, 2, 2, 100}, {4, 2, 2, 100}, {2, 2, 2, 100}, {3, 2, 2, 100}, {2, 2, 2, 100}, {0, 2, 2, 100}, {0, 2, 10, 100}}},
-    {4, 4, 1, 3, 10, {{0, 4, 0, 100}, {0, 1.333, 2, 100}, {3, 1.333, 2, 100}, {5, 1.333, 2, 100}, {0, 1.333, 2, 100}, {3, 1.333, 2, 100}, {5, 1.333, 2, 100}, {0, 1.333, 2, 100}, {3, 1.333, 2, 100}, {5, 1.333, 2, 100}, {0, 1.333, 2, 100}, {3, 1.333, 2,}, {5, 1.333, 2, 100}}},
+    //DELETE LATER
+    {4, 4, 1, 2, 4, 4, {{2, 4, 2, 100}, {3, 4, 2, 100}, {5, 4, 2, 100}, {0, 4, 2, 100}}}, 
+
+
+    //{4, 4, 1, 3, 13, 13, {{0, 1, 2, 100}, {1, 1, 2, 100}, {2, 2, 2, 100}, {3, 1, 2, 100}, {4, 1, 2, 100}, {5, 1, 2, 100}, {6, 1, 2, 100}, {7, 2, 2, 100}, {2, 1, 2, 100}, {0, 1, 2, 100}, {1, 2, 2, 100}, {5, 1, 2, 100}, {7, 1, 2, 100}}},
+    //{4, 4, 2, 3, 12, 12, {{0, 2, 0, 100}, {0, 2, 2, 100}, {2, 2, 2, 100}, {3, 2, 2, 100}, {4, 2, 2, 100}, {3, 2, 2, 100}, {4, 2, 2, 100}, {2, 2, 2, 100}, {3, 2, 2, 100}, {2, 2, 2, 100}, {0, 2, 2, 100}, {0, 2, 10, 100}}},
+    //{4, 4, 1, 3, 10, 10, {{0, 4, 0, 100}, {0, 1.333, 2, 100}, {3, 1.333, 2, 100}, {5, 1.333, 2, 100}, {0, 1.333, 2, 100}, {3, 1.333, 2, 100}, {5, 1.333, 2, 100}, {0, 1.333, 2, 100}, {3, 1.333, 2, 100}, {5, 1.333, 2, 100}, {0, 1.333, 2, 100}, {3, 1.333, 2,}, {5, 1.333, 2, 100}}},
+
+    //DELETE LATER
+    {4, 4, 1, 3, 4, 4, {{2, 4, 2, 100}, {3, 4, 2, 100}, {5, 4, 2, 100}, {0, 4, 2, 100}}}, 
+
 
     // 6/8
-    {6, 8, 1, 1, 6, {{0, 6, 2, 100}, {1, 6, 2, 100}, {2, 6, 2, 100}, {3, 6, 2, 100}, {4, 6, 2, 100}, {5, 6, 2, 100}}},
-    {6, 8, 2, 1, 8, {{0, 6, 2, 100}, {1, 6, 2, 100}, {2, 6, 2, 100}, {3, 6, 2, 100}, {4, 6, 2, 100}, {5, 6, 2, 100}, {6, 6, 2, 100}, {7, 6, 2, 100}}},
+    {6, 8, 1, 1, 6, 6, {{0, 6, 2, 100}, {1, 6, 2, 100}, {2, 6, 2, 100}, {3, 6, 2, 100}, {4, 6, 2, 100}, {5, 6, 2, 100}}},
+    {6, 8, 2, 1, 8, 8, {{0, 6, 2, 100}, {1, 6, 2, 100}, {2, 6, 2, 100}, {3, 6, 2, 100}, {4, 6, 2, 100}, {5, 6, 2, 100}, {6, 6, 2, 100}, {7, 6, 2, 100}}},
 
     // 5/4
-    {5, 4, 1, 2, 5, {{0, 5, 2, 100}, {1, 5, 2, 100}, {2, 5, 2, 100}, {3, 5, 2, 100}, {4, 5, 2, 100}}},
-    {5, 4, 3, 2, 6, {{0, 4, 2, 100}, {1, 4, 2, 100}, {2, 4, 2, 100}, {3, 4, 2, 100}, {4, 4, 2, 100}, {5, 4, 2, 100}}},
+    {5, 4, 1, 2, 5, 5, {{0, 5, 2, 100}, {1, 5, 2, 100}, {2, 5, 2, 100}, {3, 5, 2, 100}, {4, 5, 2, 100}}},
+    {5, 4, 3, 2, 6, 6, {{0, 4, 2, 100}, {1, 4, 2, 100}, {2, 4, 2, 100}, {3, 4, 2, 100}, {4, 4, 2, 100}, {5, 4, 2, 100}}},
 
     // 3/4
-    {3, 4, 1, 3, 6, {{0, 3, 2, 100}, {1, 3, 2, 100}, {2, 3, 2, 100}, {3, 3, 2, 100}, {4, 3, 2, 100}, {5, 3, 2, 100}}},
-    {7, 4, 2, 3, 8, {{0, 7, 2, 100}, {1, 7, 2, 100}, {2, 7, 2, 100}, {3, 7, 2, 100}, {4, 7, 2, 100}, {5, 7, 2, 100}}},
+    {3, 4, 1, 3, 6, 6, {{0, 3, 2, 100}, {1, 3, 2, 100}, {2, 3, 2, 100}, {3, 3, 2, 100}, {4, 3, 2, 100}, {5, 3, 2, 100}}},
+    {7, 4, 2, 3, 8, 8, {{0, 7, 2, 100}, {1, 7, 2, 100}, {2, 7, 2, 100}, {3, 7, 2, 100}, {4, 7, 2, 100}, {5, 7, 2, 100}}},
 
     // Special energy level 4 lick for inactivity:
-    {4, 4, 1, 4, 8, {{0, 0.25, 2, 100}, {1, 0.25, 2, 100}, {2, 0.25, 2, 100}, {3, 0.25, 2, 100}, {4, 0.25, 2, 100}, {5, 0.25, 2, 100}, {6, 0.25, 2, 100}, {7, 0.25, 2, 100}}}
+    {4, 4, 1, 4, 8, 8, {{0, 0.25, 2, 100}, {1, 0.25, 2, 100}, {2, 0.25, 2, 100}, {3, 0.25, 2, 100}, {4, 0.25, 2, 100}, {5, 0.25, 2, 100}, {6, 0.25, 2, 100}, {7, 0.25, 2, 100}}}
 };
 
 // TO DO: Incorporate logic for each lick to add/subtract additional notes or put it back to its default state
 // Function to add a note to the lick, determining parameters
-void add_note_to_lick(Lick& lick, int position) {
+void add_note_to_lick(Lick &lick, int position) {
 
-  if (position >= 0 && position <= lick.data.size()) {
+  //probabiity to add note to lick is
+  float prob_to_add_note = (1.0 + lick.orig_num_notes) / (1.0 + 1.25 * lick.num_notes);
+  Serial.print("PROBABILITY TO ADD NOTE: ");
+  Serial.println(prob_to_add_note);
+
+  if (position >= 0 && position < lick.data.size() && R.uniform(0, 1) < prob_to_add_note) {
     // Determine new note based on current note
     Note new_note;
     
+    // don't add note if target is less than a sixteenthS
+    if(lick.data[position].duration < 1){
+      return;
+    }
+
     // gets half the duration 
-    new_note.duration = lick.data[position].duration / 2;
+    new_note.duration = max(0.01, lick.data[position].duration / 2);
 
     // same velocity
     new_note.velocity = lick.data[position].velocity;
 
-    // gets probability of 100 FOR NOW
-    new_note.probability = 100;
+    // gets probability of 0, (added)
+    new_note.probability = 0;
     
     // now determine its note value
     int cur_index = lick.data[position].note_index;
     int max_interval = 1; // set max distance between grace notes
 
     if(cur_index == 0){
-      new_note.note_index = static_cast<int>round(R.uniform(cur_index - 0.5, cur_index + max_interval + 0.499));
+      new_note.note_index = static_cast<int>(round(R.uniform(cur_index, cur_index + max_interval + 0.499)));
     }else if (cur_index == 7){
-      new_note.note_index = static_cast<int>round(R.uniform(cur_index - max_interval - 0.5, cur_index + 0.499));
+      new_note.note_index = static_cast<int>(round(R.uniform(cur_index - max_interval - 0.5, cur_index)));
     }else{
-      new_note.note_index = static_cast<int>round(R.uniform(cur_index - max_interval - 0.5, cur_index + max_interval + 0.499));
+      new_note.note_index = static_cast<int>(round(R.uniform(cur_index - max_interval - 0.5, cur_index + max_interval + 0.499)));
     }
 
     bool after;
-    after = static_cast<int>round(R.uniform(0, 1));
+    after = (R.uniform(0, 1) > 0.5);
     
-    // want to insert after if position is zero and NOT when its the last note, randomly chosen otherwise
-    if((after || position == 0) && position != lick.data.size() - 1){
+    // only want to insert after if position is zero and NOT when its the last note, randomly chosen otherwise
+    if((after || position == 0) && position != (lick.data.size() - 1)){
       lick.data[position].duration = lick.data[position].duration / 2;
       lick.data.insert(lick.data.begin() + position + 1, new_note);
+      lick.num_notes++;
+
     // otherwise before is fine
-    }else{ 
+    } else if (position > 0 && position < lick.data.size()){ 
       lick.data[position - 1].duration = lick.data[position - 1].duration / 2; // always want to adjust the preceding note's duration
       lick.data.insert(lick.data.begin() + position, new_note);
-    }
-    
-    lick.num_notes = lick.data.size();
+      lick.num_notes++;
+
+    } 
   }
 }
-    // Update num_notes to reflect the new count
 
+void subtract_note_from_lick(Lick &lick) {
+  // Collect indices of all added notes
+  float prob_to_remove_note = 1 - ((1.0 + lick.orig_num_notes) / (1.0 + 1.25 * lick.num_notes));
 
+  if(R.uniform(0, 1) < prob_to_remove_note){
+    
+    std::vector<int> added_note_indices;
+    
+    for (int i = 0; i < lick.data.size(); i++) {
+      if (lick.data[i].probability == 0) {
+        added_note_indices.push_back(i);
+      }
+    }
 
+    // If there are no added notes, exit the function
+    if (added_note_indices.empty()) return;
+
+    // Randomly select one of the added notes to remove
+    int random_index = added_note_indices[static_cast<int>(R.uniform(0, added_note_indices.size()-1))];
+    
+    // Adjust duration of surrounding notes
+    if (random_index > 0) {
+      // If there is a preceding note, restore its duration
+      lick.data[random_index - 1].duration *= 2;
+    } else if (random_index < lick.data.size() - 1) {
+      // If it's the first note, adjust the next note's duration
+      lick.data[random_index + 1].duration *= 2;
+    }
+
+    // Remove the selected note from lick
+    lick.data.erase(lick.data.begin() + random_index);
+    lick.num_notes--;
+  }
+}
 
 
 // Function to print the details of each lick
@@ -983,6 +1030,7 @@ void print_lick(struct Lick* lick) {
 
 // Function to filter and return all licks with energy_level == 1
 void filter_licks_by_energy_level(struct Lick* bank, int size, int target_energy_level) {
+    
     printf("\nLicks with energy level %d:\n", target_energy_level);
     
     for (int i = 0; i < size; i++) {
@@ -1102,6 +1150,7 @@ int get_lick_wait_period(int bpm, int time_sig_num, int time_sig_denom){
       max_sensor_val = sensor_values[i];
     }
   }
+
   float sensor_mult = (255 - max_sensor_val) / 255.0; // want this to reduce 
   num_measures = static_cast<int>(sensor_mult * num_measures);
 
@@ -1162,6 +1211,7 @@ int check_sensor_inactivity(int energy_level) {
 }
 
 
+static bool can_add_note = 0;
 
 /***********************************************************
  * Function: Note* play_licks()
@@ -1172,7 +1222,7 @@ void play_licks(int energy_level, int time_sig_num, int time_sig_denom, Prandom 
   int cur_note_on_time = millis();
   int cur_note_off_time = 2147483647; //max value on int
   bool next_note_ready = 1;
-  struct Lick cur_lick;
+  struct Lick* cur_lick;
 
   int orig_bpm = bpm;
   bool play_another_lick = 1;
@@ -1210,23 +1260,31 @@ void play_licks(int energy_level, int time_sig_num, int time_sig_denom, Prandom 
     struct Lick** matching_licks = pick_licks_by_criteria(Bank_of_licks, BoL_len, energy_level, time_sig_num, time_sig_denom, &result_count);
 
     if (matching_licks != NULL) {
-        printf("Found %d matching licks:\n", result_count);
+        //printf("Found %d matching licks:\n", result_count);
         // Print the matching licks
-        for (int i = 0; i < result_count; i++) {
-            print_lick(matching_licks[i]);
+        //for (int i = 0; i < result_count; i++) {
+            //print_lick(matching_licks[i]);
             // WANT TO CHOOSE LICK SOMEHOW
-            int rnd_lick_idx = static_cast<int>(round(R.uniform(-0.5, result_count-0.5)));
-            cur_lick = *matching_licks[rnd_lick_idx];
-        }
+            //int rnd_lick_idx = static_cast<int>(round(R.uniform(0, result_count-0.501)));
+            //cur_lick = *matching_licks[rnd_lick_idx];
+        //}
+
+        int rnd_lick_idx = static_cast<int>(round(R.uniform(0, result_count-0.501)));
+        cur_lick = matching_licks[rnd_lick_idx];
         free(matching_licks);  // Free memory after use
     } else {
         printf("No matching licks found with the given criteria.\n");
         printf("Please add more licks to the bank of licks.\n");
     }
 
-    if(static_cast<int>(round(R.uniform(0, 1)))){
+    //static_cast<bool>(round(R.uniform(0, 1))) &&
+    if(can_add_note){
       // randomly select 
-      add_note_to_lick(cur_lick, static_cast<int>(round(R.uniform(-0.5, cur_lick.num_notes + 0.499))));
+      Serial.println("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
+      Serial.print("Adding note to lick now: ");
+      add_note_to_lick(*cur_lick, static_cast<int>(round(R.uniform(0, cur_lick->num_notes - 0.501))));
+      subtract_note_from_lick(*cur_lick);
+      can_add_note = 0;
     }
 
     int j = 0;
@@ -1237,19 +1295,19 @@ void play_licks(int energy_level, int time_sig_num, int time_sig_denom, Prandom 
       // PLAYING LICK
 
       //play the lick, iterating through the notes
-      while(j < cur_lick.num_notes){
+      while(j < cur_lick->num_notes){
 
         read_sensor_vals(); 
 
         //only get note when ready, prevents overriding index with other values
         if(next_note_ready){
 
-          cur_note = cur_lick.data[j];
+          cur_note = cur_lick->data[j];
           cur_note.note_index = get_unscrambled_idx(cur_note.note_index); //update with unscrambled value
 
           // some chance to use markov matrices to determine the note based on previous (increase variety)
-          if(j > 0 && static_cast<int>round(R.uniform(0, 0.7))){
-            cur_note.note_index = getNextNoteIndex(cur_lick.data[j-1].note_index, 2, R);
+          if(j > 0 && (R.uniform(0, 0.7) >= 0.5)){
+            cur_note.note_index = getNextNoteIndex(cur_lick->data[j-1].note_index, 2, R);
           }
 
           // SENSORS ACTIVE
@@ -1264,35 +1322,50 @@ void play_licks(int energy_level, int time_sig_num, int time_sig_denom, Prandom 
         
         }
 
-        update_note_timers(note_inactive_arr, cur_note);
-
+        update_note_timers(note_inactive_arr);
+        
         if(note_inactive_arr[cur_note.note_index] && next_note_ready){
           send_SPI_message_on(cur_note); //send SPI message for note on
-          note_inactive_arr[cur_note.note_index] = 0;
-          cur_note_on_time = millis();
+          note_inactive_arr[cur_note.note_index] = 0; //note is active now
+          active_note_vel_arr[cur_note.note_index] = cur_note.velocity; //update velocity so that we know which solenoids to turn off
+          cur_note_on_time = millis(); //tracking on_time for ensuring that notes are quantized (on musical grid)
           next_note_ready = 0;
 
           Serial.print("Lick note on at (ms): ");
           Serial.println(cur_note_on_time);
         }
 
+        //here we check the note timers, turning off any solenoids that exceed on time
+        check_sensor_note_timers(note_inactive_arr);
+
+        //want something based on note_timers, not current note (see above)
+        /*
         if ((!note_inactive_arr[cur_note.note_index]) && (millis() - cur_note_on_time >= get_solenoid_on_delay(cur_note.velocity)) && !next_note_ready) {
           send_SPI_message_off(cur_note);  // Send SPI message to turn off the note
-          note_inactive_arr[cur_note.note_index] = 1;                 // Mark the note as no longer active
+          note_inactive_arr[cur_note.note_index] = 1; // Mark the note as no longer active
           Serial.print("Auto note off at (ms): ");
           Serial.println(millis());
           Serial.println();
         }
+        */
 
-        if(millis() - cur_note_on_time >= 1000 / (4.0 * bpm / cur_note.duration / 60)){
+        //want to make sure that the next note is played in time, and that the previous one has been turned
+        if(millis() - cur_note_on_time >= 1000 / (4.0 * bpm / cur_note.duration / 60) && note_inactive_arr[cur_note.note_index]){
           next_note_ready = 1;
           j++;
         }
           
       };
 
+      //turn off all arms for safety
+      for(int i = 0; i < 8; i++){
+        Note temp = {i, 0, 3, 100};
+        send_SPI_message_off(temp);
+      }
+
       Serial.print("Lick Finished!!\n");
       previous_millis = millis(); //update previous_millis now that lick is finished
+      can_add_note = 1;
     }
 
     if(rand_note_index == -1)
