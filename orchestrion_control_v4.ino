@@ -92,6 +92,7 @@ void loop() {
   }else if(digitalRead(AUTO_PIN) == LOW && !(fault_detected)){ // low for autonomous mode
     Prandom R;
     int bpm = 90;
+    
     /*
     int song_length = 48;
     int time_sig = 3;
@@ -99,7 +100,7 @@ void loop() {
     int bpm = 120;
     Note* song = new Note[song_length];
 
-     //generate seed for random numbers
+    //generate seed for random numbers
     song = autonomous_seq_generation(song, energy_level, song_length, time_sig, R, bpm); //song_length must be multiple of (time_sig*4)!
     
     delete[] song;
@@ -130,8 +131,6 @@ void loop() {
 
   //otherwise do nothing
 }
-
-
 
 //void loop() {
   //Prandom R;

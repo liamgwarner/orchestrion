@@ -53,7 +53,7 @@ struct Note {
 static int this_note_time = millis(); //DEBUG PURPOSES           
 static int past_time = millis();
 
-const int lick_mode_sensor_threshold = 80;
+const int lick_mode_sensor_threshold = 120;
 static int lick_mode_inactivity_timer = millis();
 static bool tried_to_grab_attention = 0;
 
@@ -511,10 +511,10 @@ void read_sensor_vals(){
   for(int i=0; i<8; i++){
      sensor_values[i] = ad7830.readADCsingle(i); //reading channel i
      
-     //Serial.print("Sensor value CH");
-     //Serial.print(i);
-     //Serial.print(": ");
-     //Serial.println(sensor_values[i]);
+     Serial.print("Sensor value CH");
+     Serial.print(i);
+     Serial.print(": ");
+     Serial.println(sensor_values[i]);
     
   }
 
@@ -877,21 +877,22 @@ int get_unscrambled_idx(int idx){
 
 // Static bank of licks with predefined notes and variable note count
 // NOTE: bank of licks is programmed with ordered indicies which map to correct SPI indicies using above mapping 
-struct Lick Bank_of_licks[BoL_len] = {
+static struct Lick Bank_of_licks[BoL_len] = {
     // 4/4 
     {4, 4, 1, 1, 5, 5, {{0, 4, 2, 100}, {1, 2, 2, 100}, {2, 2, 2, 100}, {3, 4, 2, 100}, {4, 4, 2, 100}}},
-    {4, 4, 1, 1, 3, 3, {{0, 2, 3, 100}, {1, 2, 3, 100}, {2, 12, 2, 100}}},
-    {4, 4, 1, 1, 4, 4, {{5, 4, 1, 100}, {2, 4, 1, 100}, {5, 2, 1, 100}, {3, 6, 1, 100}}},    
-    {4, 4, 1, 1, 4, 4, {{6, 4, 2, 100}, {1, 4, 2, 100}, {2, 4, 2, 100}, {3, 4, 2, 100}}},
+    //{4, 4, 1, 1, 3, 3, {{0, 2, 3, 100}, {1, 2, 3, 100}, {2, 12, 2, 100}}},
+    //{4, 4, 1, 1, 4, 4, {{5, 4, 1, 100}, {2, 4, 1, 100}, {5, 2, 1, 100}, {3, 6, 1, 100}}},    
+    //{4, 4, 1, 1, 4, 4, {{6, 4, 2, 100}, {1, 4, 2, 100}, {2, 4, 2, 100}, {3, 4, 2, 100}}},
     {4, 4, 1, 1, 4, 4, {{5, 4, 2, 100}, {2, 4, 2, 100}, {2, 4, 2, 100}, {3, 4, 2, 100}}},
     
     //{4, 4, 2, 1, 5, 5, {{3, 4, 2, 100}, {1, 4, 2, 100}, {2, 4, 2, 100}, {3, 4, 2, 100}, {4, 4, 2, 100}}},
+   
+    //DELETE LATER
+    {4, 4, 1, 2, 4, 4, {{2, 4, 2, 100}, {3, 4, 2, 100}, {5, 4, 2, 100}, {0, 4, 2, 100}}}, 
+    {4, 4, 1, 2, 4, 4, {{1, 2, 2, 100}, {2, 2, 2, 100}, {3, 4, 2, 100}, {5, 8, 2, 100}}}, 
     //{4, 4, 2, 2, 12, 12, {{5, 4, 2, 100}, {3, 2, 2, 100}, {5, 2, 2, 100}, {4, 4, 2, 100}, {3, 2, 2, 100}, {2, 2, 2, 100}, {1, 2, 2, 100}, {2, 2, 2, 100}, {0, 4, 2, 100}, {1, 2, 2, 100}, {6, 2, 2, 100}, {5, 4, 2, 100}}},
     //{4, 4, 1, 2, 6, 6, {{2, 4, 2, 100}, {3, 3, 2, 100}, {5, 3, 2, 100}, {4, 1, 2, 100}, {1, 1, 2, 100}, {0, 4, 2, 100}}}, 
     //{4, 4, 1, 2, 8, 8, {{5, 2, 2, 100}, {4, 2, 2, 100}, {3, 2, 2, 100}, {2, 1, 2, 100}, {1, 1, 2, 100}, {0, 2, 2, 100}, {5, 2, 2, 100}, {3, 4, 2, 100}}},
-
-    //DELETE LATER
-    {4, 4, 1, 2, 4, 4, {{2, 4, 2, 100}, {3, 4, 2, 100}, {5, 4, 2, 100}, {0, 4, 2, 100}}}, 
 
 
     //{4, 4, 1, 3, 13, 13, {{0, 1, 2, 100}, {1, 1, 2, 100}, {2, 2, 2, 100}, {3, 1, 2, 100}, {4, 1, 2, 100}, {5, 1, 2, 100}, {6, 1, 2, 100}, {7, 2, 2, 100}, {2, 1, 2, 100}, {0, 1, 2, 100}, {1, 2, 2, 100}, {5, 1, 2, 100}, {7, 1, 2, 100}}},
@@ -900,6 +901,7 @@ struct Lick Bank_of_licks[BoL_len] = {
 
     //DELETE LATER
     {4, 4, 1, 3, 4, 4, {{2, 4, 2, 100}, {3, 4, 2, 100}, {5, 4, 2, 100}, {0, 4, 2, 100}}}, 
+    {4, 4, 1, 3, 4, 4, {{0, 4, 2, 100}, {5, 4, 2, 100}, {5, 4, 2, 100}, {1, 4, 2, 100}}}, 
 
 
     // 6/8
@@ -918,6 +920,7 @@ struct Lick Bank_of_licks[BoL_len] = {
     {4, 4, 1, 4, 8, 8, {{0, 0.25, 2, 100}, {1, 0.25, 2, 100}, {2, 0.25, 2, 100}, {3, 0.25, 2, 100}, {4, 0.25, 2, 100}, {5, 0.25, 2, 100}, {6, 0.25, 2, 100}, {7, 0.25, 2, 100}}}
 };
 
+
 // TO DO: Incorporate logic for each lick to add/subtract additional notes or put it back to its default state
 // Function to add a note to the lick, determining parameters
 void add_note_to_lick(Lick &lick, int position) {
@@ -931,13 +934,10 @@ void add_note_to_lick(Lick &lick, int position) {
     // Determine new note based on current note
     Note new_note;
     
-    // don't add note if target is less than a sixteenthS
+    // don't add note if target is less than a sixteenth
     if(lick.data[position].duration < 1){
       return;
     }
-
-    // gets half the duration 
-    new_note.duration = max(0.01, lick.data[position].duration / 2);
 
     // same velocity
     new_note.velocity = lick.data[position].velocity;
@@ -962,12 +962,18 @@ void add_note_to_lick(Lick &lick, int position) {
     
     // only want to insert after if position is zero and NOT when its the last note, randomly chosen otherwise
     if((after || position == 0) && position != (lick.data.size() - 1)){
+      // gets half the duration of the note before it
+      new_note.duration = max(0.01, lick.data[position].duration / 2);
+
       lick.data[position].duration = lick.data[position].duration / 2;
       lick.data.insert(lick.data.begin() + position + 1, new_note);
       lick.num_notes++;
 
     // otherwise before is fine
     } else if (position > 0 && position < lick.data.size()){ 
+      // gets half the duration of the note before it
+      new_note.duration = max(0.01, lick.data[position - 1].duration / 2);
+
       lick.data[position - 1].duration = lick.data[position - 1].duration / 2; // always want to adjust the preceding note's duration
       lick.data.insert(lick.data.begin() + position, new_note);
       lick.num_notes++;
@@ -985,7 +991,7 @@ void subtract_note_from_lick(Lick &lick) {
     std::vector<int> added_note_indices;
     
     for (int i = 0; i < lick.data.size(); i++) {
-      if (lick.data[i].probability == 0) {
+      if (lick.data[i].probability != 100) {
         added_note_indices.push_back(i);
       }
     }
@@ -997,17 +1003,19 @@ void subtract_note_from_lick(Lick &lick) {
     int random_index = added_note_indices[static_cast<int>(R.uniform(0, added_note_indices.size()-1))];
     
     // Adjust duration of surrounding notes
-    if (random_index > 0) {
+    if (random_index >= 0) {
       // If there is a preceding note, restore its duration
       lick.data[random_index - 1].duration *= 2;
-    } else if (random_index < lick.data.size() - 1) {
-      // If it's the first note, adjust the next note's duration
-      lick.data[random_index + 1].duration *= 2;
+      lick.data.erase(lick.data.begin() + random_index);
+      lick.num_notes--;
     }
+    //else if (random_index < lick.data.size() - 1) {
+      // If it's the first note, adjust the next note's duration
+    //  lick.data[random_index + 1].duration *= 2;
+    //}
 
     // Remove the selected note from lick
-    lick.data.erase(lick.data.begin() + random_index);
-    lick.num_notes--;
+    
   }
 }
 
@@ -1197,19 +1205,134 @@ int check_sensor_inactivity(int energy_level) {
   }
   
   int inactivity_wait_time = 5000;
+  Serial.print("MS since last activity: ");
+  Serial.println(millis()-lick_mode_inactivity_timer);
 
   if(tried_to_grab_attention){
     return update_energy_level();
   //tried_to_grab_attention
-  }else if(lick_mode_inactivity_timer < millis() - inactivity_wait_time && !tried_to_grab_attention){
+  }else if(lick_mode_inactivity_timer < (millis() - inactivity_wait_time) && !tried_to_grab_attention){
     tried_to_grab_attention = 1;
     return 4; // return special energy level
   }else{
     return update_energy_level();
   }
-
 }
 
+
+static struct Lick Bank_of_chimes[5] = {
+  {4, 4, 3, 1, 8, 8, {{7, 4, 2, 100}, {5, 4, 2, 100}, {6, 4, 2, 100}, {3, 8, 2, 100}, {3, 4, 2, 100}, {6, 4, 2, 100}, {7, 4, 2, 100}, {5, 16, 2, 100}}},
+  {4, 4, 3, 1, 9, 9, {{3, 4, 2, 100}, {5, 4, 2, 100}, {3, 4, 2, 100}, {2, 6, 2, 100}, {3, 2, 2, 100}, {4, 2, 2, 100}, {5, 2, 2, 100}, {3, 4, 2, 100}, {0, 16, 2, 100}}},
+  {4, 4, 3, 1, 11, 11, {{5, 2, 2, 100}, {4, 2, 2, 100}, {3, 2, 2, 100}, {1, 2, 2, 100}, {0, 6, 2, 100}, {0, 4, 2, 100}, {1, 4, 2, 100}, {2, 4, 2, 100}, {3, 2, 2, 100}, {5, 2, 2, 100}, {0, 16, 2, 100}}},
+  {4, 4, 3, 1, 11, 11, {{7, 4, 2, 100}, {6, 4, 2, 100}, {5, 4, 2, 100}, {4, 2, 2, 100}, {2, 2, 2, 100}, {3, 4, 2, 100}, {4, 4, 2, 100}, {5, 4, 2, 100}, {6, 2, 2, 100}, {7, 2, 2, 100}, {5, 16, 2, 100}}},
+  {4, 4, 6, 1, 23, 23, {{5, 4, 2, 100}, {4, 4, 2, 100}, {3, 4, 2, 100}, {3, 4, 2, 100}, {3, 2, 2, 100}, {2, 2, 2, 100}, {2, 2, 2, 100}, {3, 2, 2, 100}, {1, 4, 2, 100}, {0, 4, 2, 100}, {1, 4, 2, 100}, {3, 12, 2, 100}, {3, 4, 2, 100}, {4, 4, 2, 100}, {3, 4, 2, 100}, {5, 4, 2, 100}, {3, 2, 2, 100}, {2, 2, 2, 100}, {2, 2, 2, 100}, {3, 2, 2, 100}, {1, 4, 2, 100}, {3, 4, 2, 100}, {5, 16, 2, 100}}}
+};
+
+void play_chime(){
+  //chime is using scrambled note index mapping
+  Lick chime = Bank_of_chimes[static_cast<int>round(R.uniform(-0.499, 4.499))];
+  
+  // PLAYING LICK
+  int j = 0;
+  Note cur_note; 
+  bool next_note_ready = true;
+  int cur_note_on_time = millis();
+  int bpm = 60;
+
+  //play the lick, iterating through the notes
+  while(j < chime.num_notes){
+
+    read_sensor_vals();
+
+    //only get note when ready, prevents overriding index with other values
+    if(next_note_ready){
+
+      cur_note = chime.data[j];
+      cur_note.note_index = get_unscrambled_idx(cur_note.note_index); //update with unscrambled value
+
+      // some chance to use markov matrices to determine the note based on previous (increase variety)
+      //if(j > 0 && (R.uniform(0, 0.7) >= 0.5)){
+      //  cur_note.note_index = getNextNoteIndex(chime.data[j-1].note_index, 2, R);
+      //}
+
+      // SENSORS ACTIVE
+      // only update if someone is next to the drum and is close enough
+      // fn returns -1 if no notes are selected
+      int selected_note_idx = get_next_note_idx_from_sensors();
+      if(selected_note_idx >= 0){
+        cur_note.note_index = selected_note_idx;
+      }
+
+      cur_note.velocity = get_velocity_from_sensors(cur_note.note_index);
+    
+    }
+
+    update_note_timers(note_inactive_arr);
+    
+    if(note_inactive_arr[cur_note.note_index] && next_note_ready){
+      send_SPI_message_on(cur_note); //send SPI message for note on
+      note_inactive_arr[cur_note.note_index] = 0; //note is active now
+      active_note_vel_arr[cur_note.note_index] = cur_note.velocity; //update velocity so that we know which solenoids to turn off
+      cur_note_on_time = millis(); //tracking on_time for ensuring that notes are quantized (on musical grid)
+      next_note_ready = 0;
+
+      Serial.print("Lick note on at (ms): ");
+      Serial.println(cur_note_on_time);
+    }
+
+    //here we check the note timers, turning off any solenoids that exceed on time
+    check_sensor_note_timers(note_inactive_arr);
+
+    //want to make sure that the next note is played in time, and that the previous one has been turned
+    if(millis() - cur_note_on_time >= 1000 / (4.0 * bpm / cur_note.duration / 60) && note_inactive_arr[cur_note.note_index]){
+      next_note_ready = 1;
+      j++;
+    }
+      
+  };
+
+  //turn off all arms for safety
+  for(int i = 0; i < 8; i++){
+    Note temp = {i, 0, 3, 100};
+    send_SPI_message_off(temp);
+  }
+
+  return;
+}
+
+static bool already_chimed = true;
+
+// returns quiet_state boolean, if true then the drum shouldn't play any licks
+bool check_time_state(struct Lick* bank_init){
+  int hour = static_cast<int>(myRTC.getHour(h12Flag, pmFlag));
+  int minute = static_cast<int>(myRTC.getMinute());
+
+  Serial.print("Minute: ");
+  Serial.println(minute);
+
+  int chime_minute = 55;
+
+  // Here we determine the tolls to play at hours
+  if(minute == chime_minute && !already_chimed){
+    play_chime();
+    //reset bank of licks
+    for(int i = 0; i < BoL_len; i++){
+      Bank_of_licks[i] = bank_init[i];
+    }
+
+    already_chimed = true;
+  }else if (minute != chime_minute){
+    already_chimed = false;
+  }
+
+  // Here we can implement the schedule for when to have the drum off or on
+  // on 4/14 this was changed to last until 10pm -> supports interaction around showtimes
+  if(hour < 9 || hour >= 20){
+    return true;
+  } else {
+    return false;
+  }
+}
 
 static bool can_add_note = 0;
 
@@ -1229,7 +1352,14 @@ void play_licks(int energy_level, int time_sig_num, int time_sig_denom, Prandom 
   int result_count = 0;
   int lick_wait_period = 0;
   int previous_millis = 0;
-  
+
+  bool quiet_time = false;
+
+  //copy intial state of bank of licks for resetting purposes
+  struct Lick Bank_of_licks_init[BoL_len];
+  for(int i = 0; i < BoL_len; i++){
+    Bank_of_licks_init[i] = Bank_of_licks[i];
+  }
     
   // play until some condition is met, TBD?
   while (play_another_lick){
@@ -1237,7 +1367,8 @@ void play_licks(int energy_level, int time_sig_num, int time_sig_denom, Prandom 
       break;
     }
     
-    read_sensor_vals(); 
+    read_sensor_vals();
+    quiet_time = check_time_state(Bank_of_licks_init);
 
     bpm = update_bpm(orig_bpm);
     Serial.print("BPM: ");
@@ -1246,7 +1377,8 @@ void play_licks(int energy_level, int time_sig_num, int time_sig_denom, Prandom 
     // these use clock's hour value to update their values accordingly
     lick_wait_period = get_lick_wait_period(bpm, time_sig_num, time_sig_denom);
     energy_level = update_energy_level();
-    //energy_level = check_sensor_inactivity(energy_level);
+    //quiet_time = check_time_off_state();
+    energy_level = check_sensor_inactivity(energy_level);
 
     Serial.print("Lick wait period: ");
     Serial.println(lick_wait_period);
@@ -1277,7 +1409,7 @@ void play_licks(int energy_level, int time_sig_num, int time_sig_denom, Prandom 
         printf("Please add more licks to the bank of licks.\n");
     }
 
-    //static_cast<bool>(round(R.uniform(0, 1))) &&
+    //static_cast<bool>(round(R.uniform(0, 1)))
     if(can_add_note){
       // randomly select 
       Serial.println("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
@@ -1290,14 +1422,15 @@ void play_licks(int energy_level, int time_sig_num, int time_sig_denom, Prandom 
     int j = 0;
     Note cur_note;
     
-    if(millis() - previous_millis >= lick_wait_period){
+    //check if next lick should be played, and it's not quiet time
+    if((millis() - previous_millis >= lick_wait_period && !quiet_time) || energy_level == 4){
       
       // PLAYING LICK
 
       //play the lick, iterating through the notes
       while(j < cur_lick->num_notes){
 
-        read_sensor_vals(); 
+        read_sensor_vals();
 
         //only get note when ready, prevents overriding index with other values
         if(next_note_ready){
@@ -1306,7 +1439,7 @@ void play_licks(int energy_level, int time_sig_num, int time_sig_denom, Prandom 
           cur_note.note_index = get_unscrambled_idx(cur_note.note_index); //update with unscrambled value
 
           // some chance to use markov matrices to determine the note based on previous (increase variety)
-          if(j > 0 && (R.uniform(0, 0.7) >= 0.5)){
+          if(j > 0 && (R.uniform(0, 0.7) >= 0.5) && energy_level != 4){
             cur_note.note_index = getNextNoteIndex(cur_lick->data[j-1].note_index, 2, R);
           }
 
@@ -1353,6 +1486,9 @@ void play_licks(int energy_level, int time_sig_num, int time_sig_denom, Prandom 
         if(millis() - cur_note_on_time >= 1000 / (4.0 * bpm / cur_note.duration / 60) && note_inactive_arr[cur_note.note_index]){
           next_note_ready = 1;
           j++;
+          if(R.uniform(0.0, 1.0) >= 0.9 && energy_level != 4){
+            j = 0; // 20% chance to repeat the lick
+          }
         }
           
       };
